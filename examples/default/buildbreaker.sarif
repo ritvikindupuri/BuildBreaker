@@ -1,0 +1,436 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "BuildBreaker",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/ritvikindupuri/BuildBreaker",
+          "rules": [
+            {
+              "id": "BB-PATH-ESCAPE",
+              "name": "Host and builder paths readable outside build context",
+              "shortDescription": {
+                "text": "Host and builder paths readable outside build context"
+              },
+              "fullDescription": {
+                "text": "file=/etc/passwd size=702; file=/etc/shadow size=260; file=/proc/1/root/etc/shadow size=260 | info: parent-dirs-visible-from-workdir"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Jail each build in its own mount namespace with only the project context mounted. Drop unnecessary hostPath volumes from build pods."
+              }
+            },
+            {
+              "id": "BB-PRIV-CAPS",
+              "name": "Build runs as root or with a Docker socket",
+              "shortDescription": {
+                "text": "Build runs as root or with a Docker socket"
+              },
+              "fullDescription": {
+                "text": "build-runs-as-root | info: uid=0 gid=0; CapEff=00000000a80425fb"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Use rootless BuildKit. Never mount docker.sock into untrusted builds. Drop capabilities and enable seccomp/AppArmor on build steps."
+              }
+            },
+            {
+              "id": "BB-NET-EGRESS",
+              "name": "Arbitrary network egress during build",
+              "shortDescription": {
+                "text": "Arbitrary network egress during build"
+              },
+              "fullDescription": {
+                "text": "https://example.com"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Build with --network=none (or an allowlisted egress proxy). Deny outbound traffic from build pods at the CNI or egress gateway."
+              }
+            },
+            {
+              "id": "BB-PATH-PROC",
+              "name": "Sensitive procfs entries readable during build",
+              "shortDescription": {
+                "text": "Sensitive procfs entries readable during build"
+              },
+              "fullDescription": {
+                "text": "proc1-environ-lines=2; proc1-root-etc-passwd | info: cwd=/"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Run builds in a dedicated PID and mount namespace (rootless BuildKit or isolated build pods). Mask sensitive procfs paths."
+              }
+            },
+            {
+              "id": "BB-SECRET-ENV",
+              "name": "Build-arg and environment secrets visible to RUN",
+              "shortDescription": {
+                "text": "Build-arg and environment secrets visible to RUN"
+              },
+              "fullDescription": {
+                "text": "build-arg-visible len=32 | info: arg_present; no-common-secret-env-names"
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Use BuildKit --secret mounts (not ARG) for credentials. Never pass long-lived tokens as build-args. Prefer short-lived OIDC."
+              }
+            },
+            {
+              "id": "BB-NET-INTERNAL",
+              "name": "Internal network services reachable during build",
+              "shortDescription": {
+                "text": "Internal network services reachable during build"
+              },
+              "fullDescription": {
+                "text": "target=http://host.docker.internal/ code=500; target=http://metadata.google.internal/ code=500"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "help": {
+                "text": "Put builders on an isolated network with no route to management planes. Block docker.sock TCP (2375) and host gateway access."
+              }
+            },
+            {
+              "id": "BB-CACHE-CROSS",
+              "name": "Shared cache may expose foreign build markers",
+              "shortDescription": {
+                "text": "Shared cache may expose foreign build markers"
+              },
+              "fullDescription": {
+                "text": "no-foreign-markers | info: wrote-marker token_len=32"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Use per-tenant cache namespaces (BuildKit --opt, separate cache volumes, or cache backends with tenant prefixes)."
+              }
+            },
+            {
+              "id": "BB-META-IMDS",
+              "name": "Cloud metadata service reachable during build",
+              "shortDescription": {
+                "text": "Cloud metadata service reachable during build"
+              },
+              "fullDescription": {
+                "text": "link-local-unreachable"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Block link-local (169.254.0.0/16) from the build network namespace. Prefer workload identity / OIDC over instance roles on builders."
+              }
+            },
+            {
+              "id": "BB-PRIV-INSECURE",
+              "name": "BuildKit RUN --security=insecure is honored",
+              "shortDescription": {
+                "text": "BuildKit RUN --security=insecure is honored"
+              },
+              "fullDescription": {
+                "text": "security-insecure-not-honored-or-unsupported"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Do not start BuildKit with --allow-insecure-entitlement security.insecure for untrusted tenants. Keep entitlements off by default."
+              }
+            },
+            {
+              "id": "BB-SECRET-FILE",
+              "name": "Secret files and docker config readable during build",
+              "shortDescription": {
+                "text": "Secret files and docker config readable during build"
+              },
+              "fullDescription": {
+                "text": "no-common-secret-paths"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Do not mount host docker configs or cluster SA tokens into untrusted builds. Use ephemeral BuildKit secret mounts scoped to one RUN."
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "BB-PATH-ESCAPE",
+          "level": "error",
+          "message": {
+            "text": "Host and builder paths readable outside build context: file=/etc/passwd size=702; file=/etc/shadow size=260; file=/proc/1/root/etc/shadow size=260 | info: parent-dirs-visible-from-workdir [PROVEN]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-path-escape/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "PROVEN",
+            "severity": "critical",
+            "refs": [
+              "SMITHERY-2025"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-PRIV-CAPS",
+          "level": "error",
+          "message": {
+            "text": "Build runs as root or with a Docker socket: build-runs-as-root | info: uid=0 gid=0; CapEff=00000000a80425fb [PROVEN]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-priv-caps/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "PROVEN",
+            "severity": "critical",
+            "refs": [
+              "SHAI-HULUD-2"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-NET-EGRESS",
+          "level": "error",
+          "message": {
+            "text": "Arbitrary network egress during build: https://example.com [PROVEN]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-net-egress/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "PROVEN",
+            "severity": "high",
+            "refs": [
+              "SHAI-HULUD-2"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-PATH-PROC",
+          "level": "error",
+          "message": {
+            "text": "Sensitive procfs entries readable during build: proc1-environ-lines=2; proc1-root-etc-passwd | info: cwd=/ [PROVEN]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-path-proc/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "PROVEN",
+            "severity": "high",
+            "refs": [
+              "SMITHERY-2025"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-SECRET-ENV",
+          "level": "error",
+          "message": {
+            "text": "Build-arg and environment secrets visible to RUN: build-arg-visible len=32 | info: arg_present; no-common-secret-env-names [PROVEN]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-secret-env/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "PROVEN",
+            "severity": "high",
+            "refs": [
+              "SHAI-HULUD-2"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-NET-INTERNAL",
+          "level": "warning",
+          "message": {
+            "text": "Internal network services reachable during build: target=http://host.docker.internal/ code=500; target=http://metadata.google.internal/ code=500 [PROVEN]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-net-internal/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "PROVEN",
+            "severity": "medium",
+            "refs": []
+          }
+        },
+        {
+          "ruleId": "BB-CACHE-CROSS",
+          "level": "note",
+          "message": {
+            "text": "Shared cache may expose foreign build markers: no-foreign-markers | info: wrote-marker token_len=32 [BLOCKED]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-cache-cross/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "BLOCKED",
+            "severity": "info",
+            "refs": [
+              "SMITHERY-2025"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-META-IMDS",
+          "level": "note",
+          "message": {
+            "text": "Cloud metadata service reachable during build: link-local-unreachable [BLOCKED]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-meta-imds/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "BLOCKED",
+            "severity": "info",
+            "refs": [
+              "IMDS-BUILD"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-PRIV-INSECURE",
+          "level": "note",
+          "message": {
+            "text": "BuildKit RUN --security=insecure is honored: security-insecure-not-honored-or-unsupported [BLOCKED]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-priv-insecure/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "BLOCKED",
+            "severity": "info",
+            "refs": []
+          }
+        },
+        {
+          "ruleId": "BB-SECRET-FILE",
+          "level": "note",
+          "message": {
+            "text": "Secret files and docker config readable during build: no-common-secret-paths [BLOCKED]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-secret-file/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "BLOCKED",
+            "severity": "info",
+            "refs": [
+              "SMITHERY-2025",
+              "SHAI-HULUD-2"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

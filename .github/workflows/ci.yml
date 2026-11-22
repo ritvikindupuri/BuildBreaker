@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[test]"
+      - name: Unit tests
+        run: pytest -q
+      - name: Gen smoke
+        run: |
+          buildbreaker list
+          buildbreaker gen -o /tmp/bb-probes --probe BB-NET-EGRESS
+          test -f /tmp/bb-probes/bb-net-egress/Dockerfile

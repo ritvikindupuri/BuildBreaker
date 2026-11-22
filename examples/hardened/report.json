@@ -1,0 +1,351 @@
+{
+  "tool": "BuildBreaker",
+  "version": "0.1.0",
+  "targets": [
+    "probe BB-NET-EGRESS [BLOCKED] (14.1s)",
+    "probe BB-META-IMDS [BLOCKED] (13.9s)",
+    "probe BB-SECRET-ENV [PROVEN] (3.2s)",
+    "probe BB-SECRET-FILE [BLOCKED] (3.0s)",
+    "probe BB-PATH-PROC [PROVEN] (2.9s)",
+    "probe BB-PATH-ESCAPE [PROVEN] (3.4s)",
+    "probe BB-PRIV-CAPS [PROVEN] (3.3s)",
+    "probe BB-PRIV-INSECURE [BLOCKED] (2.6s)",
+    "probe BB-CACHE-CROSS [BLOCKED] (5.7s)",
+    "probe BB-NET-INTERNAL [BLOCKED] (14.1s)"
+  ],
+  "builder": "docker 28.5.2+dfsg4; github.com/docker/buildx 0.29.1+ds1 0.29.1+ds1-4",
+  "profile": "hardened",
+  "summary": {
+    "critical": 2,
+    "high": 2,
+    "medium": 0,
+    "low": 0,
+    "info": 6
+  },
+  "proven": 4,
+  "blocked": 6,
+  "verdict": "BUILD SURFACE EXPOSED",
+  "findings": [
+    {
+      "rule_id": "BB-PATH-ESCAPE",
+      "title": "Host and builder paths readable outside build context",
+      "severity": "critical",
+      "target": "BB-PATH-ESCAPE",
+      "detail": "file=/etc/passwd size=702; file=/etc/shadow size=260; file=/proc/1/root/etc/shadow size=260 | info: parent-dirs-visible-from-workdir",
+      "remediation": "Jail each build in its own mount namespace with only the project context mounted. Drop unnecessary hostPath volumes from build pods.",
+      "evidence": {
+        "status": "REACHABLE",
+        "markers": [
+          {
+            "status": "REACHABLE",
+            "detail": "file=/etc/passwd size=702"
+          },
+          {
+            "status": "REACHABLE",
+            "detail": "file=/etc/shadow size=260"
+          },
+          {
+            "status": "REACHABLE",
+            "detail": "file=/proc/1/root/etc/shadow size=260"
+          },
+          {
+            "status": "INFO",
+            "detail": "parent-dirs-visible-from-workdir"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 3.4,
+        "image_tag": "buildbreaker-probe:bb-path-escape"
+      },
+      "cves": [
+        "SMITHERY-2025"
+      ],
+      "refs": [
+        "SMITHERY-2025"
+      ],
+      "proof": "PROVEN",
+      "file": "bb-path-escape/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-PRIV-CAPS",
+      "title": "Build runs as root or with a Docker socket",
+      "severity": "critical",
+      "target": "BB-PRIV-CAPS",
+      "detail": "build-runs-as-root | info: uid=0 gid=0; CapEff=00000000a80425fb",
+      "remediation": "Use rootless BuildKit. Never mount docker.sock into untrusted builds. Drop capabilities and enable seccomp/AppArmor on build steps.",
+      "evidence": {
+        "status": "REACHABLE",
+        "markers": [
+          {
+            "status": "REACHABLE",
+            "detail": "build-runs-as-root"
+          },
+          {
+            "status": "BLOCKED",
+            "detail": "no-docker.sock"
+          },
+          {
+            "status": "INFO",
+            "detail": "uid=0 gid=0"
+          },
+          {
+            "status": "INFO",
+            "detail": "CapEff=00000000a80425fb"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 3.25,
+        "image_tag": "buildbreaker-probe:bb-priv-caps"
+      },
+      "cves": [
+        "SHAI-HULUD-2"
+      ],
+      "refs": [
+        "SHAI-HULUD-2"
+      ],
+      "proof": "PROVEN",
+      "file": "bb-priv-caps/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-PATH-PROC",
+      "title": "Sensitive procfs entries readable during build",
+      "severity": "high",
+      "target": "BB-PATH-PROC",
+      "detail": "proc1-environ-lines=2; proc1-root-etc-passwd | info: cwd=/",
+      "remediation": "Run builds in a dedicated PID and mount namespace (rootless BuildKit or isolated build pods). Mask sensitive procfs paths.",
+      "evidence": {
+        "status": "REACHABLE",
+        "markers": [
+          {
+            "status": "REACHABLE",
+            "detail": "proc1-environ-lines=2"
+          },
+          {
+            "status": "REACHABLE",
+            "detail": "proc1-root-etc-passwd"
+          },
+          {
+            "status": "INFO",
+            "detail": "cwd=/"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 2.93,
+        "image_tag": "buildbreaker-probe:bb-path-proc"
+      },
+      "cves": [
+        "SMITHERY-2025"
+      ],
+      "refs": [
+        "SMITHERY-2025"
+      ],
+      "proof": "PROVEN",
+      "file": "bb-path-proc/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-SECRET-ENV",
+      "title": "Build-arg and environment secrets visible to RUN",
+      "severity": "high",
+      "target": "BB-SECRET-ENV",
+      "detail": "build-arg-visible len=32 | info: arg_present; no-common-secret-env-names",
+      "remediation": "Use BuildKit --secret mounts (not ARG) for credentials. Never pass long-lived tokens as build-args. Prefer short-lived OIDC.",
+      "evidence": {
+        "status": "REACHABLE",
+        "markers": [
+          {
+            "status": "REACHABLE",
+            "detail": "build-arg-visible len=32"
+          },
+          {
+            "status": "INFO",
+            "detail": "arg_present"
+          },
+          {
+            "status": "INFO",
+            "detail": "no-common-secret-env-names"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 3.17,
+        "image_tag": "buildbreaker-probe:bb-secret-env"
+      },
+      "cves": [
+        "SHAI-HULUD-2"
+      ],
+      "refs": [
+        "SHAI-HULUD-2"
+      ],
+      "proof": "PROVEN",
+      "file": "bb-secret-env/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-CACHE-CROSS",
+      "title": "Shared cache may expose foreign build markers",
+      "severity": "info",
+      "target": "BB-CACHE-CROSS",
+      "detail": "no-foreign-markers | info: wrote-marker token_len=32",
+      "remediation": "Use per-tenant cache namespaces (BuildKit --opt, separate cache volumes, or cache backends with tenant prefixes).",
+      "evidence": {
+        "status": "BLOCKED",
+        "markers": [
+          {
+            "status": "BLOCKED",
+            "detail": "no-foreign-markers"
+          },
+          {
+            "status": "INFO",
+            "detail": "wrote-marker token_len=32"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 5.74,
+        "image_tag": "buildbreaker-probe:bb-cache-cross"
+      },
+      "cves": [
+        "SMITHERY-2025"
+      ],
+      "refs": [
+        "SMITHERY-2025"
+      ],
+      "proof": "BLOCKED",
+      "file": "bb-cache-cross/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-META-IMDS",
+      "title": "Cloud metadata service reachable during build",
+      "severity": "info",
+      "target": "BB-META-IMDS",
+      "detail": "link-local-unreachable",
+      "remediation": "Block link-local (169.254.0.0/16) from the build network namespace. Prefer workload identity / OIDC over instance roles on builders.",
+      "evidence": {
+        "status": "BLOCKED",
+        "markers": [
+          {
+            "status": "BLOCKED",
+            "detail": "link-local-unreachable"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 13.89,
+        "image_tag": "buildbreaker-probe:bb-meta-imds"
+      },
+      "cves": [
+        "IMDS-BUILD"
+      ],
+      "refs": [
+        "IMDS-BUILD"
+      ],
+      "proof": "BLOCKED",
+      "file": "bb-meta-imds/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-NET-EGRESS",
+      "title": "Arbitrary network egress during build",
+      "severity": "info",
+      "target": "BB-NET-EGRESS",
+      "detail": "https://example.com",
+      "remediation": "Build with --network=none (or an allowlisted egress proxy). Deny outbound traffic from build pods at the CNI or egress gateway.",
+      "evidence": {
+        "status": "BLOCKED",
+        "markers": [
+          {
+            "status": "BLOCKED",
+            "detail": "https://example.com"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 14.12,
+        "image_tag": "buildbreaker-probe:bb-net-egress"
+      },
+      "cves": [
+        "SHAI-HULUD-2"
+      ],
+      "refs": [
+        "SHAI-HULUD-2"
+      ],
+      "proof": "BLOCKED",
+      "file": "bb-net-egress/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-NET-INTERNAL",
+      "title": "Internal network services reachable during build",
+      "severity": "info",
+      "target": "BB-NET-INTERNAL",
+      "detail": "no-internal-hit",
+      "remediation": "Put builders on an isolated network with no route to management planes. Block docker.sock TCP (2375) and host gateway access.",
+      "evidence": {
+        "status": "BLOCKED",
+        "markers": [
+          {
+            "status": "BLOCKED",
+            "detail": "no-internal-hit"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 14.1,
+        "image_tag": "buildbreaker-probe:bb-net-internal"
+      },
+      "cves": [],
+      "refs": [],
+      "proof": "BLOCKED",
+      "file": "bb-net-internal/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-PRIV-INSECURE",
+      "title": "BuildKit RUN --security=insecure is honored",
+      "severity": "info",
+      "target": "BB-PRIV-INSECURE",
+      "detail": "security-insecure-not-honored-or-unsupported",
+      "remediation": "Do not start BuildKit with --allow-insecure-entitlement security.insecure for untrusted tenants. Keep entitlements off by default.",
+      "evidence": {
+        "exit_code": 1,
+        "duration_s": 2.55928373336792,
+        "status": "BLOCKED"
+      },
+      "cves": [],
+      "refs": [],
+      "proof": "BLOCKED",
+      "file": "bb-priv-insecure/Dockerfile",
+      "line": 1
+    },
+    {
+      "rule_id": "BB-SECRET-FILE",
+      "title": "Secret files and docker config readable during build",
+      "severity": "info",
+      "target": "BB-SECRET-FILE",
+      "detail": "no-common-secret-paths",
+      "remediation": "Do not mount host docker configs or cluster SA tokens into untrusted builds. Use ephemeral BuildKit secret mounts scoped to one RUN.",
+      "evidence": {
+        "status": "BLOCKED",
+        "markers": [
+          {
+            "status": "BLOCKED",
+            "detail": "no-common-secret-paths"
+          }
+        ],
+        "exit_code": 0,
+        "duration_s": 3.03,
+        "image_tag": "buildbreaker-probe:bb-secret-file"
+      },
+      "cves": [
+        "SMITHERY-2025",
+        "SHAI-HULUD-2"
+      ],
+      "refs": [
+        "SMITHERY-2025",
+        "SHAI-HULUD-2"
+      ],
+      "proof": "BLOCKED",
+      "file": "bb-secret-file/Dockerfile",
+      "line": 1
+    }
+  ]
+}

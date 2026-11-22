@@ -1,0 +1,173 @@
+# BuildBreaker Technical Documentation
+
+## Purpose
+
+BuildBreaker is an offensive probe kit for **container build services** that compile other people's Dockerfiles on shared infrastructure. It generates harmless probe projects, builds them on a builder you control, and reports which attack surfaces are reachable during the build.
+
+It is for authorized testing of builders you own (local Docker/BuildKit, CI runners, MCP build hosts, PaaS image builders). It is not a remote exploit kit and it does not exfiltrate real secrets.
+
+## Threat model
+
+An attacker who can submit a Dockerfile and build context to a shared builder may try to:
+
+1. Read build-args, env vars, mounted secrets, or registry credentials.
+2. Reach cloud instance metadata (IMDS) and mint temporary cloud credentials.
+3. Read files outside the project build context (host paths, sibling tenant workspaces, builder home). This is the Smithery MCP class.
+4. Open arbitrary egress during `RUN` to exfiltrate data or pull a second stage.
+5. Abuse root, a mounted docker.sock, or BuildKit `security=insecure` to escape the build step.
+6. Observe or poison a shared layer/cache store across tenants.
+
+BuildBreaker encodes each of those as a probe that prints a marker when the step is reachable.
+
+## Marker protocol
+
+Every probe Dockerfile prints lines of the form:
+
+```
+BB_FINDING:<RULE_ID>:<STATUS>:<optional detail>
+```
+
+| STATUS | Meaning | Report proof tag |
+| --- | --- | --- |
+| REACHABLE | The attack surface was reachable | PROVEN |
+| BLOCKED | The check ran and the surface was not reachable | BLOCKED |
+| INFO | Extra context (uid, lengths, paths) | NA |
+
+The runner captures the combined stdout/stderr of `docker build`. The analyzer strips BuildKit prefixes like `#6 1.485 ` and ignores Dockerfile source lines that merely contain the string `BB_FINDING` inside an `echo` command.
+
+## Probe catalog
+
+### BB-NET-EGRESS (high, network)
+
+- **Tests:** `curl -I https://example.com` during `RUN`.
+- **Why:** Malicious builds phone home or exfiltrate tokens (Shai-Hulud class).
+- **Remediation:** `docker build --network=none`, or an allowlisted egress proxy / CNI deny.
+
+### BB-META-IMDS (critical, network)
+
+- **Tests:** HTTP GET to `http://169.254.169.254/` with a short timeout.
+- **Why:** IMDS credentials let a build pivot into the cloud account.
+- **Remediation:** Block `169.254.0.0/16` from the build netns. Prefer workload identity / OIDC.
+
+### BB-SECRET-ENV (high, secrets)
+
+- **Tests:** Visibility of a canary `ARG BB_CANARY_SECRET` injected by BuildBreaker. Also checks for common secret env names without printing values.
+- **Why:** Classic ARG/ENV secrets land in image history and are readable to every RUN.
+- **Remediation:** BuildKit `--secret` mounts, short-lived OIDC, never long-lived tokens as build-args.
+
+### BB-SECRET-FILE (high, secrets)
+
+- **Tests:** Existence of `/run/secrets/*`, `~/.docker/config.json`, K8s SA tokens, docker.sock.
+- **Why:** Mounted credentials give registry and API access to a hostile build.
+- **Remediation:** Do not mount host docker configs or cluster tokens into untrusted builds.
+
+### BB-PATH-PROC (high, path)
+
+- **Tests:** Readability of `/proc/1/environ`, `/proc/self/cwd`, `/proc/1/root/etc/passwd`.
+- **Why:** Procfs leaks builder environment and can open a path toward the builder root.
+- **Remediation:** Dedicated PID/mount namespaces; rootless BuildKit; mask sensitive procfs.
+
+### BB-PATH-ESCAPE (critical, path)
+
+- **Tests:** Existence/size of host and builder paths (`/etc/shadow`, `/proc/1/root/etc/shadow`, `/workspace`, `/kaniko`, `/tekton`, ...).
+- **Why:** Smithery-class path leak across the build context boundary.
+- **Remediation:** Per-build mount jail with only the project context mounted.
+
+### BB-PRIV-CAPS (critical, privilege)
+
+- **Tests:** uid/gid, CapEff, presence of `/var/run/docker.sock`.
+- **Why:** Root + docker.sock is a host escape.
+- **Remediation:** Rootless BuildKit; never mount docker.sock into untrusted builds.
+
+### BB-PRIV-INSECURE (high, privilege)
+
+- **Tests:** Whether `RUN --security=insecure` is accepted.
+- **Why:** Disables seccomp/AppArmor for that step when the entitlement is enabled.
+- **Remediation:** Do not start BuildKit with `--allow-insecure-entitlement security.insecure` for untrusted tenants. A parse/entitlement rejection is reported as BLOCKED.
+
+### BB-CACHE-CROSS (medium, isolation)
+
+- **Tests:** Writes a canary marker under `/var/cache/buildbreaker` and looks for foreign markers.
+- **Why:** Shared caches can leak artifacts or enable cache poisoning across tenants.
+- **Remediation:** Per-tenant cache namespaces / separate volumes.
+
+### BB-NET-INTERNAL (medium, network)
+
+- **Tests:** Short TCP/HTTP probes to docker bridge, RFC1918 gateways, `host.docker.internal`, `metadata.google.internal`.
+- **Why:** Builds that reach management planes can attack adjacent infrastructure.
+- **Remediation:** Isolated builder network; block docker TCP 2375 and host gateway.
+
+## CLI architecture
+
+| Module | Role |
+| --- | --- |
+| `catalog.py` | Probe metadata and Dockerfile templates |
+| `generator.py` | Writes probe projects + `manifest.json` + `CANARY.txt` |
+| `runner.py` | Invokes `docker build`, captures logs, optional image cleanup |
+| `analyzer.py` | Parses markers into `Finding` objects |
+| `report.py` | Text and JSON rendering, verdict |
+| `generators/sarif.py` | SARIF 2.1.0 for GitHub code scanning |
+| `cli.py` | `list`, `gen`, `run`, `report` |
+
+## Safety guarantees
+
+1. **No third-party exfil channel.** Markers stay in the build log. Network probes only contact `example.com` (headers) or IMDS root.
+2. **Canary secrets only.** The secret-env probe uses a random token BuildBreaker generates. It never reads and reprints real host secrets.
+3. **Confirmation gate.** `run` in active mode requires `--active --i-understand --yes`.
+4. **Authorized use.** Docs and the runtime banner state the tool is for systems you own or are authorized to test.
+5. **Cleanup option.** `--cleanup` removes `buildbreaker-probe:*` images after the run.
+
+## Output formats
+
+### Text
+
+Human report with Targets, Builder, Summary, Findings (severity + proof tag), Attack context, and Safety.
+
+### JSON
+
+```json
+{
+  "tool": "BuildBreaker",
+  "version": "0.1.0",
+  "verdict": "BUILD SURFACE EXPOSED",
+  "proven": 6,
+  "blocked": 4,
+  "findings": [ ... ]
+}
+```
+
+### SARIF 2.1.0
+
+One result per finding. `properties.proof` carries PROVEN/BLOCKED. Blocked findings are emitted at SARIF level `note`.
+
+## Verdict rules
+
+| Verdict | Condition |
+| --- | --- |
+| BUILD SURFACE EXPOSED | Any PROVEN finding with severity critical or high |
+| PARTIAL EXPOSURE | Any other PROVEN finding |
+| INCOMPLETE | Errors and no PROVEN findings |
+| HARDENED | Everything BLOCKED / NA |
+
+## Limitations
+
+- Reachability is not the same as successful theft. Operators still need to rotate anything that was actually exposed.
+- Full cross-tenant cache proof needs two tenants on one shared cache backend; the single-build probe only detects pre-existing foreign markers.
+- Classic `docker build` (non-containerd-snapshotter setups) may still share the host mount namespace with build steps; that is exactly what BB-PATH-* is meant to show.
+- Windows builders are out of scope.
+
+## Testing
+
+```bash
+pytest -q
+```
+
+Unit tests cover catalog completeness, marker parsing (including BuildKit noise), report/SARIF shape, and generate(). Integration evidence lives under `examples/` from `./demo/run-demo.sh` on Kali with Docker 28.5.2.
+
+## Attack advisory index
+
+| Id | Name | Mitigation theme |
+| --- | --- | --- |
+| SMITHERY-2025 | Smithery MCP build-path leak | Path jail, per-tenant isolation |
+| SHAI-HULUD-2 | Shai-Hulud 2.0 build-step abuse | Network isolation, short-lived OIDC |
+| IMDS-BUILD | Cloud metadata during build | Block link-local from build netns |
