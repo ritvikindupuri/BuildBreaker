@@ -23,32 +23,18 @@ Shared builders (MCP server hosts, CI image builders, PaaS Dockerfile runners, D
 BuildBreaker works in three steps:
 
 - **Generate.** It emits probe build projects (Dockerfile + tiny context) for 10 attack classes: network egress, cloud metadata, build-arg secrets, secret files, procfs reads, path escape outside the build context, root / docker.sock privilege, BuildKit `security=insecure`, cross-tenant cache markers, and internal network reachability.
-- **Run.** It builds each probe against a builder you own (local Docker / BuildKit by default), with optional `--network=none` hardening. Each probe prints `BB_FINDING` markers into the build log. Nothing is exfiltrated to a third party.
-- **Report.** It turns markers into a text report, JSON, and SARIF 2.1.0 for GitHub code scanning, with a clear verdict: `BUILD SURFACE EXPOSED`, `PARTIAL EXPOSURE`, or `HARDENED`.
+- **Run.** It builds each probe against a builder you own (local Docker / BuildKit by default), with optional `--network=none` hardening. Each probe prints findings into the build log. Nothing is exfiltrated to a third party.
+- **Report.** It turns those findings into a text report, JSON, and SARIF 2.1.0 for GitHub code scanning, with a clear verdict: `BUILD SURFACE EXPOSED`, `PARTIAL EXPOSURE`, or `HARDENED`.
 
-**Why proof matters.** A checklist that says "use BuildKit secrets" does not show that your builder still accepts classic `ARG` secrets, reaches `example.com` during `RUN`, or can read `/etc/shadow` through `/proc/1/root`. The demo below proves those on a default Docker builder, then shows `--network=none` blocking the network class.
+**Why proof matters.** A checklist that says "use BuildKit secrets" does not show that your builder still accepts classic `ARG` secrets, reaches `example.com` during `RUN`, or can read `/etc/shadow` through `/proc/1/root`. The committed demo proves those on a default Docker builder, then shows `--network=none` blocking the network class.
 
 ## Key Features
 
-**Generate**
-
-- **10 probes** across network, secrets, path, privilege, and isolation. `buildbreaker list` prints the catalog.
-- **Safe by design.** Markers go only into the build log you control. Network probes hit `example.com` headers or the IMDS root path. Secret probes use a canary build-arg, never real credentials.
-- **Profiles.** `quick` (4 key probes), `full`, `network`, `secrets`, and `hardened` (force `--network=none`).
-
-**Run**
-
-- **Local Docker / BuildKit.** Uses your installed `docker build` / buildx. No cluster required for the demo.
-- **Active gate.** `--active --i-understand --yes` required before builds run, so a paste into CI cannot fire by accident.
-- **Per-probe logs** saved under `_logs/` for evidence packs.
-
-**Report**
-
-- **Text, JSON, SARIF.** `--emit-dir` writes all three. `--fail-on` gates CI on PROVEN findings.
-- **Attack context.** Findings link to SMITHERY-2025, SHAI-HULUD-2, and IMDS-BUILD notes.
-- **Documented evidence.** The demo run is written up as a formal [security assessment report](https://github.com/ritvikindupuri/BuildBreaker/blob/main/docs/DEMO-REPORT.md) with output screenshots.
-
-**Light footprint.** Zero runtime dependencies beyond the Python standard library and a working Docker CLI.
+- **10 probes** across network, secrets, path, privilege, and isolation. Profiles: `quick` (4 key probes), `full`, `network`, `secrets`, and `hardened` (force `--network=none`). `buildbreaker list` prints the catalog.
+- **Safe by design.** Findings stay in the build log you control. Network probes hit `example.com` headers or the IMDS root path. Secret probes use a canary build-arg, never real credentials. `--active --i-understand --yes` is required before builds run, so a paste into CI cannot fire by accident.
+- **Local Docker / BuildKit.** Uses your installed `docker build` / buildx. No cluster required for the demo. Per-probe logs are saved under `_logs/` for evidence packs.
+- **Text, JSON, and SARIF 2.1.0.** `--emit-dir` writes all three. `--fail-on` gates CI on PROVEN findings. Findings link to SMITHERY-2025, SHAI-HULUD-2, and IMDS-BUILD notes.
+- **Light footprint.** Zero runtime dependencies beyond the Python standard library and a working Docker CLI.
 
 ## System Architecture
 
@@ -59,12 +45,10 @@ The diagram shows how an untrusted build project moves through BuildBreaker, fro
 </p>
 <p align="center"><b>Figure 1. BuildBreaker system architecture: tenant inputs become probe builds whose logs are parsed into reports and fixes</b></p>
 
-1. **Input.** You point BuildBreaker at a builder you own. The inputs are an untrusted tenant Dockerfile shape and a build context (files and args).
-2. **Generate.** The probe generator emits one small project per attack class (10 total), plus a canary token for secret-visibility probes.
-3. **Probe pack.** Each project is a Dockerfile and a tiny context directory, ready for `docker build`.
-4. **Build.** Docker Engine and BuildKit / buildx run each probe. Optional `--network=none` simulates a hardened builder.
-5. **Detect.** The log parser reads `BB_FINDING:<rule>:<status>:<detail>` markers. Network probes may touch IMDS or egress targets for reachability only.
-6. **Report.** Findings become a text report, JSON, SARIF for GitHub code scanning, and remediation guidance (network jail, secret mounts, path isolation).
+1. **Inputs.** You point BuildBreaker at a builder you own, plus an untrusted Dockerfile shape and a build context (files and args).
+2. **Generate.** One small probe project is emitted per attack class (10 total), including a canary token for secret-visibility checks.
+3. **Build.** Docker Engine and BuildKit / buildx run each probe. Optional `--network=none` simulates a hardened builder. Network probes may touch cloud metadata or egress targets for reachability only.
+4. **Report.** The log parser turns findings into a text report, JSON, SARIF for GitHub code scanning, and remediation guidance (network jail, secret mounts, path isolation).
 
 ## Tech Stack
 
@@ -139,12 +123,7 @@ Each probe directory contains a `Dockerfile`, a tiny `README.probe`, and an empt
 Active mode needs three flags so a copied command cannot fire by itself:
 
 ```bash
-buildbreaker run --profile quick \
-  --out /tmp/bb-demo \
-  --active --i-understand --yes \
-  --emit-dir ./examples/default \
-  --format text -o ./examples/default-run.txt \
-  --no-color
+buildbreaker run --profile quick   --out /tmp/bb-demo   --active --i-understand --yes   --emit-dir ./examples/default   --format text -o ./examples/default-run.txt   --no-color
 ```
 
 **Safety banner** (printed to stderr):
@@ -171,14 +150,9 @@ buildbreaker run --profile hardened --active --i-understand --yes --emit-dir ./o
 buildbreaker run --probe BB-NET-EGRESS --network none --active --i-understand --yes
 ```
 
-### 5. Real demo output (default builder)
+### 5. Demo results
 
-On the Kali demo host, `--profile full` produced:
-
-```
-Verdict: BUILD SURFACE EXPOSED
-Proven reachable: 6   Blocked: 4
-```
+On the Kali demo host, `--profile full` produced `Verdict: BUILD SURFACE EXPOSED` (6 proven, 4 blocked):
 
 | Probe | Result | Evidence (short) |
 | --- | --- | --- |
@@ -193,36 +167,30 @@ Proven reachable: 6   Blocked: 4
 | BB-PRIV-INSECURE | BLOCKED | `RUN --security=insecure` rejected |
 | BB-CACHE-CROSS | BLOCKED | no foreign cache markers |
 
-Full text: [`examples/default-run.txt`](examples/default-run.txt). Formal write-up with screenshots: [DEMO-REPORT.md](https://github.com/ritvikindupuri/BuildBreaker/blob/main/docs/DEMO-REPORT.md).
-
-### 6. Real demo output (hardened: `--network=none`)
+The hardened profile (`--network=none`) flips the network probes to BLOCKED. Path, secret-env, and root findings stay PROVEN, because `--network=none` does not jail the filesystem or stop classic build-args. That contrast is the point of the hardened profile.
 
 ```bash
-buildbreaker run --profile hardened \
-  --active --i-understand --yes \
-  --emit-dir ./examples/hardened \
-  -o ./examples/hardened-run.txt --no-color
+buildbreaker run --profile hardened   --active --i-understand --yes   --emit-dir ./examples/hardened   -o ./examples/hardened-run.txt --no-color
 ```
 
-Network probes flip to BLOCKED. Path, secret-env, and root findings stay PROVEN, because `--network=none` does not jail the filesystem or stop classic build-args. That contrast is the point of the hardened profile.
+Full text: [`examples/default-run.txt`](examples/default-run.txt) and [`examples/hardened-run.txt`](examples/hardened-run.txt). Formal write-up with screenshots: [DEMO-REPORT.md](https://github.com/ritvikindupuri/BuildBreaker/blob/main/docs/DEMO-REPORT.md).
 
-### 7. Emit SARIF and gate CI
+### 6. Emit SARIF and gate CI
 
 ```bash
-buildbreaker run --profile quick --active --i-understand --yes \
-  --format sarif -o buildbreaker.sarif --fail-on high
+buildbreaker run --profile quick --active --i-understand --yes   --format sarif -o buildbreaker.sarif --fail-on high
 
 buildbreaker report -i examples/default/report.json --format sarif -o out.sarif
 ```
 
-### 8. Cleanup
+### 7. Cleanup
 
 ```bash
 buildbreaker run ... --cleanup   # remove buildbreaker-probe:* images after the run
 docker images 'buildbreaker-probe:*'   # should be empty afterwards
 ```
 
-### 9. One-shot demo script
+### 8. One-shot demo script
 
 ```bash
 ./demo/run-demo.sh
@@ -230,7 +198,7 @@ docker images 'buildbreaker-probe:*'   # should be empty afterwards
 
 Runs unit tests, a quick default profile, and a hardened profile, writing under `examples/`.
 
-### 10. Flags reference (`run`)
+### 9. Flags reference (`run`)
 
 | Flag | Meaning |
 | --- | --- |

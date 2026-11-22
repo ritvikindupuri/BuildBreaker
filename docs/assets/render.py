@@ -123,11 +123,11 @@ def diagram() -> str:
         x1, y1 = R(n)
         parts.append(arrow([(x1, y1), (bus_in, y1), (bus_in, P["gen"][1]), (L("gen")[0] - 2, P["gen"][1])]))
         labels.append(pill((x1 + bus_in) / 2, y1, lab))
-    for a, b, lab in [("gen", "pack", "10 probes"), ("pack", "builder", "build"), ("builder", "parse", "logs")]:
+    for a, b, lab in [("gen", "pack", "10 probes"), ("pack", "builder", "build"), ("builder", "parse", "build logs")]:
         parts.append(arrow([R(a), (L(b)[0] - 2, P[b][1])]))
         labels.append(pill((R(a)[0] + L(b)[0]) / 2, P[a][1], lab))
     parts.append(arrow([T("builder"), (P["cloud"][0], B("cloud")[1] + 2)], accent="net", color=BLUE, dashed=True))
-    labels.append(pill(P["builder"][0], (T("builder")[1] + B("cloud")[1]) / 2, "reach test", color=BLUE,
+    labels.append(pill(P["builder"][0], (T("builder")[1] + B("cloud")[1]) / 2, "network test", color=BLUE,
                        border="#7DD3FC"))
     bus_out = 1615
     for n, lab in [("report", "JSON"), ("github", "SARIF"), ("fix", "fixes")]:
@@ -140,9 +140,9 @@ def diagram() -> str:
         ("ctx", generic_icon("probe"), "Build context", "files and args", {}),
         ("gen", generic_icon("gen"), "Probe generator", "10 attack classes", {}),
         ("pack", generic_icon("probe"), "Probe pack", "plus canary token", {}),
-        ("cloud", file_icon("cloud"), "IMDS, egress", "reachability only", {"border": BLUE, "dashed": True}),
+        ("cloud", file_icon("cloud"), "Cloud metadata", "and internet reach", {"border": BLUE, "dashed": True}),
         ("builder", file_icon("buildkit"), "BuildKit", "builder under test", {"badge_svg": brand_icon("docker")}),
-        ("parse", generic_icon("parse"), "Log parser", "BB_FINDING markers", {}),
+        ("parse", generic_icon("parse"), "Log parser", "reads build findings", {}),
         ("report", generic_icon("report"), "Report", "CI exit code gate", {}),
         ("github", brand_icon("github"), "Code scanning", "SARIF alerts", {}),
         ("fix", generic_icon("fix"), "Remediation", "network, secrets, paths", {}),
