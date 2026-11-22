@@ -57,6 +57,7 @@ The diagram shows how an untrusted build project moves through BuildBreaker, fro
 <p align="center">
   <img src="docs/assets/architecture.png" alt="BuildBreaker system architecture" width="100%">
 </p>
+<p align="center"><b>Figure 1. BuildBreaker system architecture: tenant inputs become probe builds whose logs are parsed into reports and fixes</b></p>
 
 1. **Input.** You point BuildBreaker at a builder you own. The inputs are an untrusted tenant Dockerfile shape and a build context (files and args).
 2. **Generate.** The probe generator emits one small project per attack class (10 total), plus a canary token for secret-visibility probes.
@@ -72,7 +73,7 @@ The diagram shows how an untrusted build project moves through BuildBreaker, fro
 - **Probe base images:** `alpine:3.20` (pulled at demo time).
 - **CI and reporting:** SARIF 2.1.0, GitHub code scanning, GitHub Actions.
 - **Packaging:** Python 3.9 or later, setuptools, pytest for tests. No required third-party runtime libraries.
-- **Diagram and logo:** SVG rendered with cairosvg. Docker, GitHub and Linux icons from Simple Icons (CC0).
+- **Diagram and logo:** SVG rendered with cairosvg. Docker and GitHub icons from Simple Icons (CC0).
 
 ## Setup Instructions
 

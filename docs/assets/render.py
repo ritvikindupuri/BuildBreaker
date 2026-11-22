@@ -10,6 +10,8 @@ import re
 
 import cairosvg
 
+from diagram_kit import CARD_H, CARD_W, FONT, arrow, band, card, defs, legend, pill
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ICONS = os.path.join(HERE, "icons")
 BRAND = {"docker": "#2496ED", "github": "#181717", "linux": "#222222"}
@@ -76,102 +78,91 @@ def generic_icon(name: str) -> str:
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">{GENERIC[name]}</svg>'
 
 
-W, H = 1680, 920
-CARD_W, CARD_H = 200, 150
-FONT = "DejaVu Sans"
+W, H = 1960, 900
+BLUE = "#0284C7"
+ACCENTS = {"flow": "#94A3B8", "net": BLUE}
 
-# id, x_center, y_center, icon svg, title, subtitle, dashed
-NODES = [
-    ("tenant", 150, 300, generic_icon("tenant"), "Tenant project", "untrusted Dockerfile", False),
-    ("ctx", 150, 560, generic_icon("probe"), "Build context", "files and args", False),
-    ("gen", 470, 430, generic_icon("gen"), "Probe generator", "10 attack classes", False),
-    ("pack", 760, 300, generic_icon("probe"), "Probe pack", "Dockerfile + context", False),
-    ("docker", 760, 560, brand_icon("docker"), "Docker Engine", "local builder", False),
-    ("buildkit", 1050, 430, file_icon("buildkit"), "BuildKit / buildx", "runs each probe", False),
-    ("parse", 1340, 300, generic_icon("parse"), "Log parser", "BB_FINDING markers", False),
-    ("cloud", 1340, 560, file_icon("cloud"), "IMDS / egress", "reachability only", True),
-    ("report", 1600, 240, generic_icon("report"), "Report", "text and JSON", False),
-    ("github", 1600, 430, brand_icon("github"), "Code scanning", "SARIF 2.1.0", False),
-    ("fix", 1600, 650, generic_icon("fix"), "Remediation", "network, secrets, jail", False),
-]
-
-EDGES = [
-    ("tenant", "gen"),
-    ("ctx", "gen"),
-    ("gen", "pack"),
-    ("gen", "docker"),
-    ("pack", "buildkit"),
-    ("docker", "buildkit"),
-    ("buildkit", "parse"),
-    ("buildkit", "cloud"),
-    ("parse", "report"),
-    ("parse", "github"),
-    ("parse", "fix"),
-]
-
-COLUMNS = [
-    (150, "INPUT"),
-    (470, "GENERATE"),
-    (760, "PROBE PACK"),
-    (1050, "BUILD"),
-    (1340, "DETECT"),
-    (1600, "REPORT"),
-]
+# id: (cx, cy)
+P = {
+    "tenant": (170, 330), "ctx": (170, 530),
+    "gen": (545, 430), "pack": (850, 430),
+    "cloud": (1165, 200), "builder": (1165, 430),
+    "parse": (1470, 430),
+    "report": (1810, 230), "github": (1810, 430), "fix": (1810, 630),
+}
+HW, HH = CARD_W / 2, CARD_H / 2
 
 
-def card(n) -> str:
-    nid, cx, cy, icon, title, sub, dashed = n
-    x, y = cx - CARD_W / 2, cy - CARD_H / 2
-    dash = ' stroke-dasharray="8 6"' if dashed else ""
-    stroke = "#0EA5E9" if dashed else "#CBD5E1"
-    return "\n".join(
-        [
-            f'<rect x="{x}" y="{y}" width="{CARD_W}" height="{CARD_H}" rx="16" fill="#FFFFFF" '
-            f'stroke="{stroke}" stroke-width="2"{dash} filter="url(#shadow)"/>',
-            f'<image x="{cx - 32}" y="{y + 18}" width="64" height="64" href="{png_uri(icon, 128)}"/>',
-            f'<text x="{cx}" y="{y + 108}" text-anchor="middle" font-family="{FONT}" font-size="17" '
-            f'font-weight="bold" fill="#0F172A">{title}</text>',
-            f'<text x="{cx}" y="{y + 132}" text-anchor="middle" font-family="{FONT}" font-size="13" '
-            f'fill="#64748B">{sub}</text>',
-        ]
-    )
+def L(n):
+    return P[n][0] - HW, P[n][1]
 
 
-def edge(a, b, pos) -> str:
-    _, ax, ay, *_ = pos[a]
-    _, bx, by, *_ = pos[b]
-    x1, x2 = ax + CARD_W / 2, bx - CARD_W / 2 - 6
-    return (
-        f'<path d="M{x1} {ay} C{x1 + 50} {ay}, {x2 - 50} {by}, {x2} {by}" fill="none" '
-        f'stroke="#94A3B8" stroke-width="2.4" marker-end="url(#arrow)"/>'
-    )
+def R(n):
+    return P[n][0] + HW, P[n][1]
+
+
+def T(n):
+    return P[n][0], P[n][1] - HH
+
+
+def B(n):
+    return P[n][0], P[n][1] + HH
 
 
 def diagram() -> str:
-    pos = {n[0]: n for n in NODES}
-    parts = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">',
-        '<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" '
-        'orient="auto"><path d="M0 0L10 5L0 10z" fill="#94A3B8"/></marker>'
-        '<filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" '
-        'stdDeviation="4" flood-color="#0F172A" flood-opacity="0.12"/></filter></defs>',
-        f'<rect width="{W}" height="{H}" fill="#F8FAFC"/>',
-        f'<text x="{W / 2}" y="52" text-anchor="middle" font-family="{FONT}" font-size="28" '
-        f'font-weight="bold" fill="#0F172A">Figure 1. BuildBreaker System Architecture</text>',
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">',
+             defs(ACCENTS), f'<rect width="{W}" height="{H}" fill="#FFFFFF"/>']
+    top, bh = 40, 720
+    for x, w, title in [(50, 240, "INPUTS"), (360, 640, "GENERATE"), (1045, 240, "BUILD"),
+                        (1350, 240, "DETECT"), (1670, 280, "REPORT")]:
+        parts.append(band(x, top, w, bh, title))
+
+    labels = []
+    bus_in = 418
+    for n, lab in [("tenant", "Dockerfile"), ("ctx", "files, args")]:
+        x1, y1 = R(n)
+        parts.append(arrow([(x1, y1), (bus_in, y1), (bus_in, P["gen"][1]), (L("gen")[0] - 2, P["gen"][1])]))
+        labels.append(pill((x1 + bus_in) / 2, y1, lab))
+    for a, b, lab in [("gen", "pack", "10 probes"), ("pack", "builder", "build"), ("builder", "parse", "logs")]:
+        parts.append(arrow([R(a), (L(b)[0] - 2, P[b][1])]))
+        labels.append(pill((R(a)[0] + L(b)[0]) / 2, P[a][1], lab))
+    parts.append(arrow([T("builder"), (P["cloud"][0], B("cloud")[1] + 2)], accent="net", color=BLUE, dashed=True))
+    labels.append(pill(P["builder"][0], (T("builder")[1] + B("cloud")[1]) / 2, "reach test", color=BLUE,
+                       border="#7DD3FC"))
+    bus_out = 1615
+    for n, lab in [("report", "JSON"), ("github", "SARIF"), ("fix", "fixes")]:
+        y = P[n][1]
+        parts.append(arrow([R("parse"), (bus_out, P["parse"][1]), (bus_out, y), (L(n)[0] - 2, y)]))
+        labels.append(pill((bus_out + L(n)[0]) / 2, y, lab))
+
+    cards = [
+        ("tenant", generic_icon("tenant"), "Tenant project", "untrusted Dockerfile", {}),
+        ("ctx", generic_icon("probe"), "Build context", "files and args", {}),
+        ("gen", generic_icon("gen"), "Probe generator", "10 attack classes", {}),
+        ("pack", generic_icon("probe"), "Probe pack", "plus canary token", {}),
+        ("cloud", file_icon("cloud"), "IMDS, egress", "reachability only", {"border": BLUE, "dashed": True}),
+        ("builder", file_icon("buildkit"), "BuildKit", "builder under test", {"badge_svg": brand_icon("docker")}),
+        ("parse", generic_icon("parse"), "Log parser", "BB_FINDING markers", {}),
+        ("report", generic_icon("report"), "Report", "CI exit code gate", {}),
+        ("github", brand_icon("github"), "Code scanning", "SARIF alerts", {}),
+        ("fix", generic_icon("fix"), "Remediation", "network, secrets, paths", {}),
     ]
-    for cx, label in COLUMNS:
-        parts.append(
-            f'<text x="{cx}" y="100" text-anchor="middle" font-family="{FONT}" font-size="13" '
-            f'font-weight="bold" letter-spacing="1.5" fill="#94A3B8">{label}</text>'
-        )
-    for a, b in EDGES:
-        parts.append(edge(a, b, pos))
-    for n in NODES:
-        parts.append(card(n))
-    parts.append(
-        f'<text x="{W / 2}" y="{H - 24}" text-anchor="middle" font-family="{FONT}" font-size="13" '
-        f'fill="#94A3B8">Docker, GitHub and Linux icons: Simple Icons (CC0). BuildKit and cloud icons: project artwork.</text>'
-    )
+    for n, icon, title, sub, kw in cards:
+        parts.append(card(*P[n], icon, title, sub, **kw))
+    parts.extend(labels)
+
+    leg, end = legend(0, 0, [
+        ("line", ("#94A3B8", False, "flow"), "data flow"),
+        ("line", (BLUE, True, "net"), "network reach test"),
+        ("card", (BLUE, True), "outside the builder"),
+        ("icon", generic_icon("gen"), "BuildBreaker component"),
+        ("icon", brand_icon("docker"), "external product"),
+    ])
+    lx = (W - end + 44) / 2
+    parts.append(f'<g transform="translate({lx} 815)">{leg}</g>')
+    parts.append(f'<text x="{W / 2}" y="{H - 24}" text-anchor="middle" font-family="{FONT}" font-size="13" '
+                 f'fill="#94A3B8">Docker and GitHub icons: Simple Icons (CC0). BuildKit and cloud icons: '
+                 f'project artwork.</text>')
     parts.append("</svg>")
     return "\n".join(parts)
 
@@ -179,17 +170,9 @@ def diagram() -> str:
 if __name__ == "__main__":
     svg = diagram()
     open(os.path.join(HERE, "architecture.svg"), "w").write(svg)
-    cairosvg.svg2png(
-        bytestring=svg.encode(),
-        write_to=os.path.join(HERE, "architecture.png"),
-        output_width=W * 2,
-        output_height=H * 2,
-    )
+    cairosvg.svg2png(bytestring=svg.encode(), write_to=os.path.join(HERE, "architecture.png"),
+                     output_width=W * 2, output_height=H * 2)
     logo = open(os.path.join(HERE, "logo.svg")).read()
-    cairosvg.svg2png(
-        bytestring=logo.encode(),
-        write_to=os.path.join(HERE, "logo.png"),
-        output_width=512,
-        output_height=512,
-    )
+    cairosvg.svg2png(bytestring=logo.encode(), write_to=os.path.join(HERE, "logo.png"),
+                     output_width=512, output_height=512)
     print("rendered architecture.png, architecture.svg, logo.png")
