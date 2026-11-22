@@ -1,0 +1,27 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 808B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/alpine:3.20
+#2 DONE 0.1s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 62B 0.0s done
+#3 DONE 0.0s
+
+#4 [1/2] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+#4 CACHED
+
+#5 [2/2] RUN set -eu;   if [ -r /proc/1/environ ]; then     n=$(tr "\0" "\n" < /proc/1/environ | wc -l);     echo "BB_FINDING:BB-PATH-PROC:REACHABLE:proc1-environ-lines=$n";   else     echo "BB_FINDING:BB-PATH-PROC:BLOCKED:proc1-environ";   fi;   if [ -r /proc/self/cwd ]; then     echo "BB_FINDING:BB-PATH-PROC:INFO:cwd=$(readlink /proc/self/cwd 2>/dev/null || echo unknown)";   fi;   if [ -r /proc/1/root/etc/passwd ]; then     echo "BB_FINDING:BB-PATH-PROC:REACHABLE:proc1-root-etc-passwd";   else     echo "BB_FINDING:BB-PATH-PROC:BLOCKED:proc1-root";   fi
+#5 0.370 BB_FINDING:BB-PATH-PROC:REACHABLE:proc1-environ-lines=2
+#5 0.381 BB_FINDING:BB-PATH-PROC:INFO:cwd=/
+#5 0.381 BB_FINDING:BB-PATH-PROC:REACHABLE:proc1-root-etc-passwd
+#5 DONE 0.4s
+
+#6 exporting to image
+#6 exporting layers 0.0s done
+#6 writing image sha256:834083b83a5e70d9e25254e5fd5a170ba349ff76ea4f59d4692100a05adcc971 done
+#6 naming to docker.io/library/buildbreaker-probe:bb-path-proc 0.0s done
+#6 DONE 0.1s

@@ -1,0 +1,29 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 592B 0.0s done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/alpine:3.20
+#2 DONE 0.2s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 62B 0.0s done
+#3 DONE 0.0s
+
+#4 [1/3] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
+#4 CACHED
+
+#5 [2/3] RUN apk add --no-cache curl >/dev/null 2>&1  || (apt-get update >/dev/null 2>&1 && apt-get install -y curl >/dev/null 2>&1)  || true
+#5 DONE 6.2s
+
+#6 [3/3] RUN set -eu;   if curl -sS -o /dev/null -m 5 -I https://example.com; then     echo "BB_FINDING:BB-NET-EGRESS:REACHABLE:https://example.com";   else     echo "BB_FINDING:BB-NET-EGRESS:BLOCKED:https://example.com";   fi
+#6 2.229 BB_FINDING:BB-NET-EGRESS:REACHABLE:https://example.com
+#6 DONE 2.3s
+
+#7 exporting to image
+#7 exporting layers
+#7 exporting layers 0.9s done
+#7 writing image sha256:df468692e0c4688b08a4ae0011a5bdd96e50f6e1d63d60c47237e23c9b3838ca 0.0s done
+#7 naming to docker.io/library/buildbreaker-probe:bb-net-egress 0.0s done
+#7 DONE 1.0s
