@@ -47,7 +47,7 @@ BuildBreaker generated a random 32-character hex token and passed it as the buil
 
 **Commands**
 
-Both runs required `--active --i-understand --yes` so they cannot fire from a casual paste into CI. `--cleanup` removed the probe images afterward. The commands below are the ones recorded by [`demo/run-demo.sh`](../demo/run-demo.sh).
+Both runs used `--active --i-understand --yes` (all three flags are required when `--active` is used), so the commands cannot fire from a casual paste into CI. `--cleanup` removed the probe images afterward. The commands below are the ones recorded by [`demo/run-demo.sh`](../demo/run-demo.sh).
 
 Default profile (`full`): probes use their usual network setting, so egress is allowed where the probe asks for it.
 
@@ -178,7 +178,7 @@ The results above show why the verdict stayed `BUILD SURFACE EXPOSED` after hard
 After the two runs, the lab was cleaned up and the evidence was saved as follows.
 
 - Probe images tagged `buildbreaker-probe:*` were removed with `--cleanup`.
-- Unit tests: **12 passed** (`pytest -q`).
+- Unit tests: **13 passed** (`pytest -q`).
 - Raw artifacts:
   - [`examples/default-run.txt`](../examples/default-run.txt)
   - [`examples/hardened-run.txt`](../examples/hardened-run.txt)

@@ -31,7 +31,7 @@ BuildBreaker works in three steps:
 ## Key Features
 
 - **10 probes** across network, secrets, path, privilege, and isolation. Profiles: `quick` (4 key probes), `full`, `network`, `secrets`, and `hardened` (force `--network=none`). `buildbreaker list` prints the catalog.
-- **Safe by design.** Findings stay in the build log you control. Network probes hit `example.com` headers or the IMDS root path. Secret probes use a canary build-arg, never real credentials. `--active --i-understand --yes` is required before builds run, so a paste into CI cannot fire by accident.
+- **Safe by design.** Findings stay in the build log you control. Network probes hit `example.com` headers or the IMDS root path. Secret probes use a canary build-arg, never real credentials. When using `--active` mode, all three flags (`--active --i-understand --yes`) are required, so a command copied into CI cannot fire by accident.
 - **Local Docker / BuildKit.** Uses your installed `docker build` / buildx. No cluster required for the demo. Per-probe logs are saved under `_logs/` for evidence packs.
 - **Text, JSON, and SARIF 2.1.0.** `--emit-dir` writes all three. `--fail-on` gates CI on PROVEN findings. Findings link to SMITHERY-2025, SHAI-HULUD-2, and IMDS-BUILD notes.
 - **Light footprint.** Zero runtime dependencies beyond the Python standard library and a working Docker CLI.
@@ -87,7 +87,7 @@ pytest -q
 buildbreaker list
 ```
 
-**Verified from a fresh clone** on Kali Linux 2026.3 with Docker 28.5.2 and buildx 0.29.1: install, `buildbreaker list`, and `pytest` (12 passed) all succeed before any demo build.
+**Verified from a fresh clone** on Kali Linux 2026.3 with Docker 28.5.2 and buildx 0.29.1: install, `buildbreaker list`, and `pytest` (13 passed) all succeed before any demo build.
 
 ## Usage Guide
 
@@ -200,7 +200,7 @@ docker images 'buildbreaker-probe:*'   # should be empty afterwards
 ./demo/run-demo.sh
 ```
 
-Runs unit tests, a quick default profile, and a hardened profile, writing under `examples/`.
+Runs unit tests, the full profile with default networking, and the hardened profile, writing under `examples/`.
 
 ### 9. Flags reference (`run`)
 
@@ -211,7 +211,7 @@ Runs unit tests, a quick default profile, and a hardened profile, writing under 
 | `--category` | `network`, `secrets`, `path`, `privilege`, `isolation` |
 | `--profile` | `full`, `quick`, `network`, `secrets`, `hardened` |
 | `--network` | Override: `default`, `none`, `host` |
-| `--active --i-understand --yes` | Required confirmation gate |
+| `--active --i-understand --yes` | Confirmation gate (all three required when using `--active`) |
 | `--emit-dir DIR` | Write `report.txt`, `report.json`, `buildbreaker.sarif` |
 | `--fail-on SEVERITY` | Exit 2 if a PROVEN finding meets the floor |
 | `--cleanup` | Delete probe images when finished |
