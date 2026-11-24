@@ -123,7 +123,9 @@ Each probe directory contains a `Dockerfile`, a tiny `README.probe`, and an empt
 Active mode needs three flags so a copied command cannot fire by itself:
 
 ```bash
-buildbreaker run --profile quick   --out /tmp/bb-demo   --active --i-understand --yes   --emit-dir ./examples/default   --format text -o ./examples/default-run.txt   --no-color
+buildbreaker run --profile quick --out /tmp/bb-demo \
+  --active --i-understand --yes \
+  --emit-dir ./out --format text -o ./out-run.txt --no-color
 ```
 
 **Safety banner** (printed to stderr):
@@ -151,6 +153,8 @@ buildbreaker run --probe BB-NET-EGRESS --network none --active --i-understand --
 ```
 
 ### 5. Demo results
+
+The committed demo used BuildBreaker's own 10 generated probe projects as the only input. No real tenant or customer Dockerfile was scanned.
 
 On the Kali demo host, `--profile full` produced `Verdict: BUILD SURFACE EXPOSED` (6 proven, 4 blocked):
 
