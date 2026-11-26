@@ -1,8 +1,8 @@
 #0 building with "default" instance using docker driver
 
 #1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 866B 0.0s done
-#1 DONE 0.1s
+#1 transferring dockerfile: 2.41kB 0.0s done
+#1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/alpine:3.20
 #2 DONE 0.1s
@@ -14,17 +14,17 @@
 #4 [1/3] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 #4 CACHED
 
-#5 [2/3] RUN apk add --no-cache curl busybox-extras >/dev/null 2>&1 || true
-#5 DONE 4.5s
+#5 [2/3] RUN apk add --no-cache curl >/dev/null 2>&1 || true
+#5 DONE 5.7s
 
-#6 [3/3] RUN set -eu;   hit=0;   for target in       http://172.17.0.1:2375/       http://10.0.0.1/       http://192.168.1.1/       http://host.docker.internal/       http://metadata.google.internal/; do     code=$(curl -sS -o /dev/null -w "%{http_code}" -m 2 "$target" 2>/dev/null || echo 000);     if [ "$code" != "000" ] && [ "$code" != "000000" ]; then       echo "BB_FINDING:BB-NET-INTERNAL:REACHABLE:target=$target code=$code";       hit=1;     fi;   done;   if [ "$hit" -eq 0 ]; then     echo "BB_FINDING:BB-NET-INTERNAL:BLOCKED:no-internal-hit";   fi
-#6 5.684 BB_FINDING:BB-NET-INTERNAL:REACHABLE:target=http://host.docker.internal/ code=500
-#6 5.721 BB_FINDING:BB-NET-INTERNAL:REACHABLE:target=http://metadata.google.internal/ code=500
-#6 DONE 5.9s
+#6 [3/3] RUN set -eu;   if ! command -v curl >/dev/null 2>&1; then     echo "BB_FINDING:BB-NET-INTERNAL:BLOCKED:curl-unavailable-no-network"; exit 0;   fi;   h=$(awk '$2=="00000000"{print $3; exit}' /proc/net/route 2>/dev/null || true);   gw="";   if [ -n "$h" ]; then     set -- $(echo "$h" | sed 's/\(..\)\(..\)\(..\)\(..\)/\4 \3 \2 \1/');     gw=$(printf "%d.%d.%d.%d" "0x$1" "0x$2" "0x$3" "0x$4");   fi;   targets="172.17.0.1:2375 10.0.0.1:80 192.168.1.1:80 host.docker.internal:80";   if [ -n "$gw" ]; then targets="$gw:22 $gw:80 $gw:2375 $targets"; fi;   hit=0;   for t in $targets; do     rc=0; ip=$(curl -sS --noproxy "*" -o /dev/null -m 2 -w "%{remote_ip}" "http://$t/" 2>/dev/null) || rc=$?;     case "$rc" in 6|7|28) continue;; esac;     case "$ip" in       10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*|127.*|169.254.*) ;;       *) echo "BB_FINDING:BB-NET-INTERNAL:INFO:connected-but-not-private target=$t ip=$ip"; continue;;     esac;     case "$rc" in       *) echo "BB_FINDING:BB-NET-INTERNAL:REACHABLE:tcp-connect-ok target=$t ip=$ip"; hit=1;          case "$t" in *:2375)            if curl -sS --noproxy "*" -m 2 "http://$t/version" 2>/dev/null | grep -q ApiVersion; then              echo "BB_FINDING:BB-NET-INTERNAL:REACHABLE:docker-api-unauthenticated target=$t";            fi;;          esac;;     esac;   done;   if [ "$hit" -eq 0 ]; then     echo "BB_FINDING:BB-NET-INTERNAL:BLOCKED:no-private-tcp-connect";   fi
+#6 1.552 BB_FINDING:BB-NET-INTERNAL:REACHABLE:tcp-connect-ok target=172.17.0.1:22 ip=172.17.0.1
+#6 5.913 BB_FINDING:BB-NET-INTERNAL:INFO:connected-but-not-private target=host.docker.internal:80 ip=198.18.0.1
+#6 DONE 6.0s
 
 #7 exporting to image
 #7 exporting layers
 #7 exporting layers 0.8s done
-#7 writing image sha256:9b67733a8eb34707be28188e818a82d6ae193fb6f67e051be3f68b49c38de5ea done
+#7 writing image sha256:8e7c1c96293041ffd0fca0e1eb627a901125e4d74f18018f722a902fc7b1e28d done
 #7 naming to docker.io/library/buildbreaker-probe:bb-net-internal 0.0s done
 #7 DONE 0.9s

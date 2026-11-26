@@ -97,6 +97,9 @@ def findings_from_result(result: BuildResult) -> List[Finding]:
             )
         ]
 
+    if meta.get("host_marker") and markers:
+        markers = _judge_host_marker(result, markers)
+
     by_status: Dict[str, List[str]] = {"REACHABLE": [], "BLOCKED": [], "INFO": []}
     for _rule, status, detail in markers:
         by_status.setdefault(status, []).append(detail)
@@ -142,6 +145,10 @@ def findings_from_result(result: BuildResult) -> List[Finding]:
 
     refs = list(meta.get("refs") or [])
     severity = meta.get("severity", "info") if primary_status == "REACHABLE" else "info"
+    if primary_status == "REACHABLE":
+        for needle, sev in (meta.get("severity_escalation") or {}).items():
+            if any(needle in d for d in details):
+                severity = sev
 
     return [
         Finding(
@@ -169,6 +176,37 @@ def findings_from_result(result: BuildResult) -> List[Finding]:
             line=1,
         )
     ]
+
+
+def _judge_host_marker(
+    result: BuildResult, markers: List[Tuple[str, str, str]]
+) -> List[Tuple[str, str, str]]:
+    """Decide BB-PATH-ESCAPE from the host-side marker, not from the probe.
+
+    The build only ever learns the marker file PATHS. PROVEN requires the
+    random value BuildBreaker wrote on the host to appear in a marker line
+    the build printed. Anything else is BLOCKED.
+    """
+    token = result.host_token
+    out: List[Tuple[str, str, str]] = []
+    proven_paths: List[str] = []
+    for rule, status, detail in markers:
+        if status == "INFO" and detail.startswith("read path=") and " value=" in detail:
+            path_part, value = detail[len("read path="):].split(" value=", 1)
+            if token and value.strip() == token:
+                proven_paths.append(path_part)
+            continue  # never echo marker values into the report
+        out.append((rule, status, detail))
+    if proven_paths:
+        for pth in proven_paths:
+            out.insert(0, (result.probe_id, "REACHABLE", f"host-marker-read path={pth}"))
+    else:
+        n = len(result.host_marker_paths)
+        out.insert(
+            0,
+            (result.probe_id, "BLOCKED", f"host-marker-not-readable host_files={n}"),
+        )
+    return out
 
 
 def attack_blurb(ref_id: str) -> Optional[str]:

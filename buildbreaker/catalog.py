@@ -140,23 +140,34 @@ RUN set -eu; \\
 def _df_path_proc() -> str:
     return """\
 # BuildBreaker probe: BB-PATH-PROC
-# Tests whether the build can read sensitive procfs entries (builder PID
-# environ, root cwd). Safe: reports lengths and key names only.
+# Tests whether the build step can see builder HOST processes through /proc.
+# /proc/1 inside a normal build is the build step's own shell, so reading
+# /proc/1/environ is reported as INFO only. The REACHABLE signal is a host
+# process name (dockerd, containerd, buildkitd, systemd, sshd) showing up in
+# /proc, which only happens when the build shares the host PID namespace.
+# Safe: reads process names and line counts only; never prints values.
 FROM alpine:3.20
 RUN set -eu; \\
   if [ -r /proc/1/environ ]; then \\
     n=$(tr "\\0" "\\n" < /proc/1/environ | wc -l); \\
-    echo "BB_FINDING:BB-PATH-PROC:REACHABLE:proc1-environ-lines=$n"; \\
-  else \\
-    echo "BB_FINDING:BB-PATH-PROC:BLOCKED:proc1-environ"; \\
+    c1=$(cat /proc/1/comm 2>/dev/null || echo unknown); \\
+    echo "BB_FINDING:BB-PATH-PROC:INFO:own-pid1-environ-readable pid1=$c1 lines=$n"; \\
   fi; \\
-  if [ -r /proc/self/cwd ]; then \\
-    echo "BB_FINDING:BB-PATH-PROC:INFO:cwd=$(readlink /proc/self/cwd 2>/dev/null || echo unknown)"; \\
-  fi; \\
-  if [ -r /proc/1/root/etc/passwd ]; then \\
-    echo "BB_FINDING:BB-PATH-PROC:REACHABLE:proc1-root-etc-passwd"; \\
+  total=0; hostp=""; \\
+  for d in /proc/[0-9]*; do \\
+    [ -r "$d/comm" ] || continue; \\
+    total=$((total+1)); \\
+    c=$(cat "$d/comm" 2>/dev/null || true); \\
+    case "$c" in \\
+      dockerd|containerd|buildkitd|systemd|sshd|kubelet) \\
+        case " $hostp " in *" $c "*) ;; *) hostp="$hostp $c";; esac;; \\
+    esac; \\
+  done; \\
+  echo "BB_FINDING:BB-PATH-PROC:INFO:visible-processes=$total"; \\
+  if [ -n "$hostp" ]; then \\
+    echo "BB_FINDING:BB-PATH-PROC:REACHABLE:host-processes-visible names=$(echo $hostp | tr " " "+")"; \\
   else \\
-    echo "BB_FINDING:BB-PATH-PROC:BLOCKED:proc1-root"; \\
+    echo "BB_FINDING:BB-PATH-PROC:BLOCKED:no-host-processes-visible"; \\
   fi
 """
 
@@ -164,46 +175,32 @@ RUN set -eu; \\
 def _df_path_escape() -> str:
     return """\
 # BuildBreaker probe: BB-PATH-ESCAPE
-# Smithery-class: can the build read host / builder files outside the
-# build context? Safe: existence and size only; never dumps contents.
+# Smithery-class: can the build read a file on the builder HOST that sits
+# outside the build context? Before the build, BuildBreaker writes a random
+# marker file on the host (a temp dir and the parent of the build context)
+# and passes only the file PATHS in BB_HOST_MARKER_PATHS. The random value
+# itself is never given to the build. If the value shows up in the build
+# log, the build really read a host file. The build container's own
+# /etc/passwd, /etc/shadow and /proc/1/root are NOT checked, because those
+# belong to the build image, not the host.
+# Safe: prints at most the first 64 bytes of BuildBreaker's own marker file.
 FROM alpine:3.20
+ARG BB_HOST_MARKER_PATHS=""
 COPY . /src
 WORKDIR /src
 RUN set -eu; \\
-  hit=0; \\
-  for p in \\
-      /etc/passwd \\
-      /etc/shadow \\
-      /root/.ssh/id_rsa \\
-      /home/*/.ssh/id_rsa \\
-      /var/run/docker.sock \\
-      /proc/1/root/etc/shadow \\
-      /workspace \\
-      /builder/home \\
-      /kaniko \\
-      /tekton \\
-      /cloud-build \\
-      /mnt/secrets \\
-      /opt/buildagent/secrets; do \\
-    for f in $p; do \\
-      if [ -e "$f" ]; then \\
-        if [ -d "$f" ]; then \\
-          echo "BB_FINDING:BB-PATH-ESCAPE:REACHABLE:dir=$f"; \\
-        else \\
-          sz=$(wc -c < "$f" 2>/dev/null || echo 0); \\
-          echo "BB_FINDING:BB-PATH-ESCAPE:REACHABLE:file=$f size=$sz"; \\
-        fi; \\
-        hit=1; \\
+  tried=0; \\
+  for p in $BB_HOST_MARKER_PATHS; do \\
+    b=$(basename "$p"); \\
+    for c in "$p" "/proc/1/root$p" "/host$p" "/rootfs$p" "../$b" "../../$b"; do \\
+      tried=$((tried+1)); \\
+      if [ -r "$c" ] && [ -f "$c" ]; then \\
+        v=$(head -c 64 "$c" | tr -cd "A-Za-z0-9"); \\
+        echo "BB_FINDING:BB-PATH-ESCAPE:INFO:read path=$c value=$v"; \\
       fi; \\
     done; \\
   done; \\
-  # Parent of the build context via relative path tricks (often blocked by BuildKit)
-  if [ -e ../ ] || [ -e ../../ ]; then \\
-    echo "BB_FINDING:BB-PATH-ESCAPE:INFO:parent-dirs-visible-from-workdir"; \\
-  fi; \\
-  if [ "$hit" -eq 0 ]; then \\
-    echo "BB_FINDING:BB-PATH-ESCAPE:BLOCKED:no-extra-host-paths"; \\
-  fi
+  echo "BB_FINDING:BB-PATH-ESCAPE:INFO:host-marker-paths-tried=$tried"
 """
 
 
@@ -285,26 +282,50 @@ RUN set -eu; \\
 def _df_net_internal() -> str:
     return """\
 # BuildBreaker probe: BB-NET-INTERNAL
-# Tests reachability of common internal endpoints from the build.
-# Safe: TCP connect probes with 2s timeout; no payloads.
+# Tests whether the build can open a TCP connection to internal endpoints:
+# the default gateway, the docker bridge, common RFC1918 routers and
+# host.docker.internal. Proxy settings are ignored (--noproxy) so a proxy
+# error page is never mistaken for reachability. curl exit codes 6, 7 and 28
+# (DNS failure, connection refused, timeout) mean NOT connected; any other
+# result means the TCP handshake completed. A connect only counts when the
+# address curl actually reached is private (RFC1918, loopback, link-local);
+# a name that resolves to a public or special-use address is reported as
+# INFO. Port 2375 is also checked for an
+# unauthenticated Docker API (GET /version returning "ApiVersion").
+# Safe: connect plus one GET with 2s timeouts; no payloads.
 FROM alpine:3.20
-RUN apk add --no-cache curl busybox-extras >/dev/null 2>&1 || true
+RUN apk add --no-cache curl >/dev/null 2>&1 || true
 RUN set -eu; \\
+  if ! command -v curl >/dev/null 2>&1; then \\
+    echo "BB_FINDING:BB-NET-INTERNAL:BLOCKED:curl-unavailable-no-network"; exit 0; \\
+  fi; \\
+  h=$(awk '$2=="00000000"{print $3; exit}' /proc/net/route 2>/dev/null || true); \\
+  gw=""; \\
+  if [ -n "$h" ]; then \\
+    set -- $(echo "$h" | sed 's/\\(..\\)\\(..\\)\\(..\\)\\(..\\)/\\4 \\3 \\2 \\1/'); \\
+    gw=$(printf "%d.%d.%d.%d" "0x$1" "0x$2" "0x$3" "0x$4"); \\
+  fi; \\
+  targets="172.17.0.1:2375 10.0.0.1:80 192.168.1.1:80 host.docker.internal:80"; \\
+  if [ -n "$gw" ]; then targets="$gw:22 $gw:80 $gw:2375 $targets"; fi; \\
   hit=0; \\
-  for target in \\
-      http://172.17.0.1:2375/ \\
-      http://10.0.0.1/ \\
-      http://192.168.1.1/ \\
-      http://host.docker.internal/ \\
-      http://metadata.google.internal/; do \\
-    code=$(curl -sS -o /dev/null -w "%{http_code}" -m 2 "$target" 2>/dev/null || echo 000); \\
-    if [ "$code" != "000" ] && [ "$code" != "000000" ]; then \\
-      echo "BB_FINDING:BB-NET-INTERNAL:REACHABLE:target=$target code=$code"; \\
-      hit=1; \\
-    fi; \\
+  for t in $targets; do \\
+    rc=0; ip=$(curl -sS --noproxy "*" -o /dev/null -m 2 -w "%{remote_ip}" "http://$t/" 2>/dev/null) || rc=$?; \\
+    case "$rc" in 6|7|28) continue;; esac; \\
+    case "$ip" in \\
+      10.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|192.168.*|127.*|169.254.*) ;; \\
+      *) echo "BB_FINDING:BB-NET-INTERNAL:INFO:connected-but-not-private target=$t ip=$ip"; continue;; \\
+    esac; \\
+    case "$rc" in \\
+      *) echo "BB_FINDING:BB-NET-INTERNAL:REACHABLE:tcp-connect-ok target=$t ip=$ip"; hit=1; \\
+         case "$t" in *:2375) \\
+           if curl -sS --noproxy "*" -m 2 "http://$t/version" 2>/dev/null | grep -q ApiVersion; then \\
+             echo "BB_FINDING:BB-NET-INTERNAL:REACHABLE:docker-api-unauthenticated target=$t"; \\
+           fi;; \\
+         esac;; \\
+    esac; \\
   done; \\
   if [ "$hit" -eq 0 ]; then \\
-    echo "BB_FINDING:BB-NET-INTERNAL:BLOCKED:no-internal-hit"; \\
+    echo "BB_FINDING:BB-NET-INTERNAL:BLOCKED:no-private-tcp-connect"; \\
   fi
 """
 
@@ -386,12 +407,14 @@ PROBES: List[Dict] = [
     },
     {
         "id": "BB-PATH-PROC",
-        "title": "Sensitive procfs entries readable during build",
+        "title": "Builder host processes visible through /proc during build",
         "category": "path",
-        "severity": "high",
+        "severity": "medium",
         "description": (
-            "Readable /proc/1/environ or /proc/1/root leaks builder "
-            "environment variables and can open a path to the builder host root."
+            "If the build shares the builder host's PID namespace, /proc lists "
+            "host daemons (dockerd, containerd, sshd) and their environments. "
+            "Reading /proc/1/environ alone is not a leak: in a normal build, "
+            "PID 1 is the build step's own shell."
         ),
         "remediation": (
             "Run builds in a dedicated PID and mount namespace (rootless "
@@ -404,12 +427,13 @@ PROBES: List[Dict] = [
     },
     {
         "id": "BB-PATH-ESCAPE",
-        "title": "Host and builder paths readable outside build context",
+        "title": "Host file outside the build context readable during build",
         "category": "path",
         "severity": "critical",
         "description": (
-            "Smithery-class failure: a build can see files outside its "
-            "project context (host secrets, sibling tenant workspaces, builder home)."
+            "Smithery-class failure: a build can read files on the builder "
+            "host outside its project context. Proven only when the build "
+            "prints a random marker that BuildBreaker wrote on the host."
         ),
         "remediation": (
             "Jail each build in its own mount namespace with only the project "
@@ -419,6 +443,7 @@ PROBES: List[Dict] = [
         "dockerfile_fn": _df_path_escape,
         "network": "none",
         "needs_canary_arg": False,
+        "host_marker": True,
     },
     {
         "id": "BB-PRIV-CAPS",
@@ -476,12 +501,14 @@ PROBES: List[Dict] = [
     },
     {
         "id": "BB-NET-INTERNAL",
-        "title": "Internal network services reachable during build",
+        "title": "Internal TCP endpoints reachable during build",
         "category": "network",
-        "severity": "medium",
+        "severity": "low",
         "description": (
-            "Builds that can reach the docker bridge gateway, metadata "
-            "aliases, or RFC1918 services can attack infrastructure adjacent to the builder."
+            "A completed TCP connection from the build to the gateway, docker "
+            "bridge or RFC1918 hosts shows the build can talk to infrastructure "
+            "next to the builder. Connect alone is low; an unauthenticated "
+            "Docker API on port 2375 raises it to critical."
         ),
         "remediation": (
             "Put builders on an isolated network with no route to management "
@@ -491,6 +518,7 @@ PROBES: List[Dict] = [
         "dockerfile_fn": _df_net_internal,
         "network": "default",
         "needs_canary_arg": False,
+        "severity_escalation": {"docker-api-unauthenticated": "critical"},
     },
 ]
 

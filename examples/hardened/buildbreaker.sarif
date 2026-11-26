@@ -10,22 +10,6 @@
           "informationUri": "https://github.com/ritvikindupuri/BuildBreaker",
           "rules": [
             {
-              "id": "BB-PATH-ESCAPE",
-              "name": "Host and builder paths readable outside build context",
-              "shortDescription": {
-                "text": "Host and builder paths readable outside build context"
-              },
-              "fullDescription": {
-                "text": "file=/etc/passwd size=702; file=/etc/shadow size=260; file=/proc/1/root/etc/shadow size=260 | info: parent-dirs-visible-from-workdir"
-              },
-              "defaultConfiguration": {
-                "level": "error"
-              },
-              "help": {
-                "text": "Jail each build in its own mount namespace with only the project context mounted. Drop unnecessary hostPath volumes from build pods."
-              }
-            },
-            {
               "id": "BB-PRIV-CAPS",
               "name": "Build runs as root or with a Docker socket",
               "shortDescription": {
@@ -39,22 +23,6 @@
               },
               "help": {
                 "text": "Use rootless BuildKit. Never mount docker.sock into untrusted builds. Drop capabilities and enable seccomp/AppArmor on build steps."
-              }
-            },
-            {
-              "id": "BB-PATH-PROC",
-              "name": "Sensitive procfs entries readable during build",
-              "shortDescription": {
-                "text": "Sensitive procfs entries readable during build"
-              },
-              "fullDescription": {
-                "text": "proc1-environ-lines=2; proc1-root-etc-passwd | info: cwd=/"
-              },
-              "defaultConfiguration": {
-                "level": "error"
-              },
-              "help": {
-                "text": "Run builds in a dedicated PID and mount namespace (rootless BuildKit or isolated build pods). Mask sensitive procfs paths."
               }
             },
             {
@@ -123,18 +91,50 @@
             },
             {
               "id": "BB-NET-INTERNAL",
-              "name": "Internal network services reachable during build",
+              "name": "Internal TCP endpoints reachable during build",
               "shortDescription": {
-                "text": "Internal network services reachable during build"
+                "text": "Internal TCP endpoints reachable during build"
               },
               "fullDescription": {
-                "text": "no-internal-hit"
+                "text": "curl-unavailable-no-network"
               },
               "defaultConfiguration": {
                 "level": "note"
               },
               "help": {
                 "text": "Put builders on an isolated network with no route to management planes. Block docker.sock TCP (2375) and host gateway access."
+              }
+            },
+            {
+              "id": "BB-PATH-ESCAPE",
+              "name": "Host file outside the build context readable during build",
+              "shortDescription": {
+                "text": "Host file outside the build context readable during build"
+              },
+              "fullDescription": {
+                "text": "host-marker-not-readable host_files=2 | info: host-marker-paths-tried=12"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Jail each build in its own mount namespace with only the project context mounted. Drop unnecessary hostPath volumes from build pods."
+              }
+            },
+            {
+              "id": "BB-PATH-PROC",
+              "name": "Builder host processes visible through /proc during build",
+              "shortDescription": {
+                "text": "Builder host processes visible through /proc during build"
+              },
+              "fullDescription": {
+                "text": "no-host-processes-visible | info: own-pid1-environ-readable pid1=sh lines=2; visible-processes=1"
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Run builds in a dedicated PID and mount namespace (rootless BuildKit or isolated build pods). Mask sensitive procfs paths."
               }
             },
             {
@@ -174,32 +174,6 @@
       },
       "results": [
         {
-          "ruleId": "BB-PATH-ESCAPE",
-          "level": "error",
-          "message": {
-            "text": "Host and builder paths readable outside build context: file=/etc/passwd size=702; file=/etc/shadow size=260; file=/proc/1/root/etc/shadow size=260 | info: parent-dirs-visible-from-workdir [PROVEN]"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "bb-path-escape/Dockerfile"
-                },
-                "region": {
-                  "startLine": 1
-                }
-              }
-            }
-          ],
-          "properties": {
-            "proof": "PROVEN",
-            "severity": "critical",
-            "refs": [
-              "SMITHERY-2025"
-            ]
-          }
-        },
-        {
           "ruleId": "BB-PRIV-CAPS",
           "level": "error",
           "message": {
@@ -222,32 +196,6 @@
             "severity": "critical",
             "refs": [
               "SHAI-HULUD-2"
-            ]
-          }
-        },
-        {
-          "ruleId": "BB-PATH-PROC",
-          "level": "error",
-          "message": {
-            "text": "Sensitive procfs entries readable during build: proc1-environ-lines=2; proc1-root-etc-passwd | info: cwd=/ [PROVEN]"
-          },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": {
-                  "uri": "bb-path-proc/Dockerfile"
-                },
-                "region": {
-                  "startLine": 1
-                }
-              }
-            }
-          ],
-          "properties": {
-            "proof": "PROVEN",
-            "severity": "high",
-            "refs": [
-              "SMITHERY-2025"
             ]
           }
         },
@@ -359,7 +307,7 @@
           "ruleId": "BB-NET-INTERNAL",
           "level": "note",
           "message": {
-            "text": "Internal network services reachable during build: no-internal-hit [BLOCKED]"
+            "text": "Internal TCP endpoints reachable during build: curl-unavailable-no-network [BLOCKED]"
           },
           "locations": [
             {
@@ -377,6 +325,58 @@
             "proof": "BLOCKED",
             "severity": "info",
             "refs": []
+          }
+        },
+        {
+          "ruleId": "BB-PATH-ESCAPE",
+          "level": "note",
+          "message": {
+            "text": "Host file outside the build context readable during build: host-marker-not-readable host_files=2 | info: host-marker-paths-tried=12 [BLOCKED]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-path-escape/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "BLOCKED",
+            "severity": "info",
+            "refs": [
+              "SMITHERY-2025"
+            ]
+          }
+        },
+        {
+          "ruleId": "BB-PATH-PROC",
+          "level": "note",
+          "message": {
+            "text": "Builder host processes visible through /proc during build: no-host-processes-visible | info: own-pid1-environ-readable pid1=sh lines=2; visible-processes=1 [BLOCKED]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "bb-path-proc/Dockerfile"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "properties": {
+            "proof": "BLOCKED",
+            "severity": "info",
+            "refs": [
+              "SMITHERY-2025"
+            ]
           }
         },
         {

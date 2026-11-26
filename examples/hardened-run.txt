@@ -1,39 +1,31 @@
 BuildBreaker 0.1.0  container build-service probe report
 
 Targets
-  - probe BB-NET-EGRESS [BLOCKED] (14.1s)
-  - probe BB-META-IMDS [BLOCKED] (13.9s)
-  - probe BB-SECRET-ENV [PROVEN] (3.2s)
-  - probe BB-SECRET-FILE [BLOCKED] (3.0s)
-  - probe BB-PATH-PROC [PROVEN] (2.9s)
-  - probe BB-PATH-ESCAPE [PROVEN] (3.4s)
-  - probe BB-PRIV-CAPS [PROVEN] (3.3s)
-  - probe BB-PRIV-INSECURE [BLOCKED] (2.6s)
-  - probe BB-CACHE-CROSS [BLOCKED] (5.7s)
-  - probe BB-NET-INTERNAL [BLOCKED] (14.1s)
+  - probe BB-NET-EGRESS [BLOCKED] (15.8s)
+  - probe BB-META-IMDS [BLOCKED] (14.2s)
+  - probe BB-SECRET-ENV [PROVEN] (3.9s)
+  - probe BB-SECRET-FILE [BLOCKED] (3.4s)
+  - probe BB-PATH-PROC [BLOCKED] (3.8s)
+  - probe BB-PATH-ESCAPE [BLOCKED] (3.9s)
+  - probe BB-PRIV-CAPS [PROVEN] (4.1s)
+  - probe BB-PRIV-INSECURE [BLOCKED] (2.8s)
+  - probe BB-CACHE-CROSS [BLOCKED] (3.8s)
+  - probe BB-NET-INTERNAL [BLOCKED] (14.2s)
 
 Builder
   - docker 28.5.2+dfsg4; github.com/docker/buildx 0.29.1+ds1 0.29.1+ds1-4
   - profile: hardened
 
 Summary
-  CRITICAL 2  HIGH 2  MEDIUM 0  LOW 0  INFO 6
-  Proven reachable: 4   Blocked: 6
+  CRITICAL 1  HIGH 1  MEDIUM 0  LOW 0  INFO 8
+  Proven reachable: 2   Blocked: 8
   Verdict: BUILD SURFACE EXPOSED
 
 Findings
-  CRITICAL BB-PATH-ESCAPE Host and builder paths readable outside build context [PROVEN]  (bb-path-escape/Dockerfile:1)
-           file=/etc/passwd size=702; file=/etc/shadow size=260; file=/proc/1/root/etc/shadow size=260 | info: parent-dirs-visible-from-workdir
-           Refs: SMITHERY-2025
-           Fix: Jail each build in its own mount namespace with only the project context mounted. Drop unnecessary hostPath volumes from build pods.
   CRITICAL BB-PRIV-CAPS Build runs as root or with a Docker socket [PROVEN]  (bb-priv-caps/Dockerfile:1)
            build-runs-as-root | info: uid=0 gid=0; CapEff=00000000a80425fb
            Refs: SHAI-HULUD-2
            Fix: Use rootless BuildKit. Never mount docker.sock into untrusted builds. Drop capabilities and enable seccomp/AppArmor on build steps.
-  HIGH     BB-PATH-PROC Sensitive procfs entries readable during build [PROVEN]  (bb-path-proc/Dockerfile:1)
-           proc1-environ-lines=2; proc1-root-etc-passwd | info: cwd=/
-           Refs: SMITHERY-2025
-           Fix: Run builds in a dedicated PID and mount namespace (rootless BuildKit or isolated build pods). Mask sensitive procfs paths.
   HIGH     BB-SECRET-ENV Build-arg and environment secrets visible to RUN [PROVEN]  (bb-secret-env/Dockerfile:1)
            build-arg-visible len=32 | info: arg_present; no-common-secret-env-names
            Refs: SHAI-HULUD-2
@@ -50,9 +42,17 @@ Findings
            https://example.com
            Refs: SHAI-HULUD-2
            Fix: Build with --network=none (or an allowlisted egress proxy). Deny outbound traffic from build pods at the CNI or egress gateway.
-  INFO     BB-NET-INTERNAL Internal network services reachable during build [BLOCKED]  (bb-net-internal/Dockerfile:1)
-           no-internal-hit
+  INFO     BB-NET-INTERNAL Internal TCP endpoints reachable during build [BLOCKED]  (bb-net-internal/Dockerfile:1)
+           curl-unavailable-no-network
            Fix: Put builders on an isolated network with no route to management planes. Block docker.sock TCP (2375) and host gateway access.
+  INFO     BB-PATH-ESCAPE Host file outside the build context readable during build [BLOCKED]  (bb-path-escape/Dockerfile:1)
+           host-marker-not-readable host_files=2 | info: host-marker-paths-tried=12
+           Refs: SMITHERY-2025
+           Fix: Jail each build in its own mount namespace with only the project context mounted. Drop unnecessary hostPath volumes from build pods.
+  INFO     BB-PATH-PROC Builder host processes visible through /proc during build [BLOCKED]  (bb-path-proc/Dockerfile:1)
+           no-host-processes-visible | info: own-pid1-environ-readable pid1=sh lines=2; visible-processes=1
+           Refs: SMITHERY-2025
+           Fix: Run builds in a dedicated PID and mount namespace (rootless BuildKit or isolated build pods). Mask sensitive procfs paths.
   INFO     BB-PRIV-INSECURE BuildKit RUN --security=insecure is honored [BLOCKED]  (bb-priv-insecure/Dockerfile:1)
            security-insecure-not-honored-or-unsupported
            Fix: Do not start BuildKit with --allow-insecure-entitlement security.insecure for untrusted tenants. Keep entitlements off by default.

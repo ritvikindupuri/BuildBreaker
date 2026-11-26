@@ -5,25 +5,26 @@
 #1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/alpine:3.20
-#2 DONE 0.1s
+#2 DONE 0.2s
 
 #3 [internal] load .dockerignore
-#3 transferring context: 62B 0.0s done
-#3 DONE 0.0s
+#3 transferring context: 62B 0.1s done
+#3 DONE 0.1s
 
 #4 [1/2] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 #4 CACHED
 
 #5 [2/2] RUN set -eu;   mkdir -p /var/cache/buildbreaker /tmp/buildbreaker-cache;   echo "$BB_CACHE_TOKEN" > /var/cache/buildbreaker/marker;   echo "$BB_CACHE_TOKEN" > /tmp/buildbreaker-cache/marker;   foreign=0;   for f in /var/cache/buildbreaker/* /tmp/buildbreaker-cache/*; do     [ -e "$f" ] || continue;     val=$(cat "$f" 2>/dev/null || true);     if [ -n "$val" ] && [ "$val" != "$BB_CACHE_TOKEN" ]; then       echo "BB_FINDING:BB-CACHE-CROSS:REACHABLE:foreign-marker-in=$f";       foreign=1;     fi;   done;   echo "BB_FINDING:BB-CACHE-CROSS:INFO:wrote-marker token_len=${#BB_CACHE_TOKEN}";   if [ "$foreign" -eq 0 ]; then     echo "BB_FINDING:BB-CACHE-CROSS:BLOCKED:no-foreign-markers";   fi
-#5 0.375 BB_FINDING:BB-CACHE-CROSS:INFO:wrote-marker token_len=32
-#5 0.375 BB_FINDING:BB-CACHE-CROSS:BLOCKED:no-foreign-markers
-#5 DONE 0.4s
+#5 0.585 BB_FINDING:BB-CACHE-CROSS:INFO:wrote-marker token_len=32
+#5 0.585 BB_FINDING:BB-CACHE-CROSS:BLOCKED:no-foreign-markers
+#5 DONE 0.7s
 
 #6 exporting to image
+#6 exporting layers
 #6 exporting layers 0.1s done
-#6 writing image sha256:d18ff91b6d90323c81e8035d683d22ab8540bb2b6cdf50fb0dfbacc926a87aac done
+#6 writing image sha256:ee18f8a47f1780634ec4d4c095e36c6c4bc73a235620563ee0e4fd5ecaa95601 done
 #6 naming to docker.io/library/buildbreaker-probe:bb-cache-cross 0.0s done
-#6 DONE 0.1s
+#6 DONE 0.2s
 
  [33m1 warning found (use docker --debug to expand):
 [0m - SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "BB_CACHE_TOKEN") (line 6)

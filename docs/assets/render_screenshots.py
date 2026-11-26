@@ -123,7 +123,13 @@ FIGS = [
         "default-findings.png",
         "examples/default-run.txt",
         "examples/default-run.txt",
-        [(1, 3), (19, 46)],
+        [(1, 3), (19, 39)],
+    ),
+    (
+        "default-path-blocked.png",
+        "examples/default-run.txt",
+        "examples/default-run.txt",
+        [(24, 24), (48, 55)],
     ),
     (
         "hardened-summary.png",
@@ -135,7 +141,7 @@ FIGS = [
         "hardened-network-blocked.png",
         "examples/hardened-run.txt",
         "examples/hardened-run.txt",
-        [(19, 22), (48, 62)],
+        [(19, 22), (41, 47)],
     ),
 ]
 

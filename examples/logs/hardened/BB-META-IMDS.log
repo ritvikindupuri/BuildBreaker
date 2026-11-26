@@ -5,7 +5,7 @@
 #1 DONE 0.0s
 
 #2 [internal] load metadata for docker.io/library/alpine:3.20
-#2 DONE 0.5s
+#2 DONE 0.1s
 
 #3 [internal] load .dockerignore
 #3 transferring context: 62B 0.0s done
@@ -15,14 +15,14 @@
 #4 CACHED
 
 #5 [2/3] RUN apk add --no-cache curl >/dev/null 2>&1 || true
-#5 DONE 10.5s
+#5 DONE 10.6s
 
 #6 [3/3] RUN set -eu;   code=$(curl -sS -o /tmp/imds.txt -w "%{http_code}" -m 3     -H "Metadata-Flavor: Google"     http://169.254.169.254/ 2>/dev/null || echo 000);   if [ "$code" != "000" ] && [ "$code" != "000000" ]; then     head -c 80 /tmp/imds.txt >/tmp/imds.head 2>/dev/null || true;     echo "BB_FINDING:BB-META-IMDS:REACHABLE:http_code=$code";   else     echo "BB_FINDING:BB-META-IMDS:BLOCKED:link-local-unreachable";   fi
-#6 0.397 BB_FINDING:BB-META-IMDS:BLOCKED:link-local-unreachable
-#6 DONE 0.5s
+#6 0.515 BB_FINDING:BB-META-IMDS:BLOCKED:link-local-unreachable
+#6 DONE 0.6s
 
 #7 exporting to image
 #7 exporting layers 0.1s done
-#7 writing image sha256:c5ed0069a9e7901831630337f37c3e14f7cee879a51e81b3c9a22b49e33c72e7 done
+#7 writing image sha256:99f228a17780e3ac6b04d07d86a99a8a1baa86a9e59b75e98de6cff73e26d820 done
 #7 naming to docker.io/library/buildbreaker-probe:bb-meta-imds 0.0s done
 #7 DONE 0.2s

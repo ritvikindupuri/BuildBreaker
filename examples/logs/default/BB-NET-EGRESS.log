@@ -15,15 +15,15 @@
 #4 CACHED
 
 #5 [2/3] RUN apk add --no-cache curl >/dev/null 2>&1  || (apt-get update >/dev/null 2>&1 && apt-get install -y curl >/dev/null 2>&1)  || true
-#5 DONE 6.2s
+#5 DONE 5.2s
 
 #6 [3/3] RUN set -eu;   if curl -sS -o /dev/null -m 5 -I https://example.com; then     echo "BB_FINDING:BB-NET-EGRESS:REACHABLE:https://example.com";   else     echo "BB_FINDING:BB-NET-EGRESS:BLOCKED:https://example.com";   fi
-#6 2.229 BB_FINDING:BB-NET-EGRESS:REACHABLE:https://example.com
-#6 DONE 2.3s
+#6 1.752 BB_FINDING:BB-NET-EGRESS:REACHABLE:https://example.com
+#6 DONE 1.8s
 
 #7 exporting to image
 #7 exporting layers
-#7 exporting layers 0.9s done
-#7 writing image sha256:df468692e0c4688b08a4ae0011a5bdd96e50f6e1d63d60c47237e23c9b3838ca 0.0s done
+#7 exporting layers 0.8s done
+#7 writing image sha256:501e0c91259c6b50ad3cad8eb6cde59b97f3349a99fd21fd1942b96c055b7400 done
 #7 naming to docker.io/library/buildbreaker-probe:bb-net-egress 0.0s done
-#7 DONE 1.0s
+#7 DONE 0.8s

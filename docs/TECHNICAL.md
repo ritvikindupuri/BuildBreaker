@@ -61,15 +61,15 @@ The runner captures the combined stdout/stderr of `docker build`. The analyzer s
 - **Why:** Mounted credentials give registry and API access to a hostile build.
 - **Remediation:** Do not mount host docker configs or cluster tokens into untrusted builds.
 
-### BB-PATH-PROC (high, path)
+### BB-PATH-PROC (medium, path)
 
-- **Tests:** Readability of `/proc/1/environ`, `/proc/self/cwd`, `/proc/1/root/etc/passwd`.
-- **Why:** Procfs leaks builder environment and can open a path toward the builder root.
+- **Tests:** Lists `/proc/*/comm` and looks for builder host daemons (`dockerd`, `containerd`, `buildkitd`, `systemd`, `sshd`, `kubelet`). Any hit is REACHABLE, because it means the build shares the host PID namespace. Reading `/proc/1/environ` is reported as INFO only: in a normal build, PID 1 is the build step's own shell, so its environment is the build's own, not the host's.
+- **Why:** A shared PID namespace exposes host process names and opens a route to their environments and file descriptors.
 - **Remediation:** Dedicated PID/mount namespaces; rootless BuildKit; mask sensitive procfs.
 
 ### BB-PATH-ESCAPE (critical, path)
 
-- **Tests:** Existence/size of host and builder paths (`/etc/shadow`, `/proc/1/root/etc/shadow`, `/workspace`, `/kaniko`, `/tekton`, ...).
+- **Tests:** Before the build, the runner writes a random 32-character marker into two host files outside the build context: one in a fresh temp dir and one next to (not inside) the probe's context dir. Only the file paths are passed to the build (`BB_HOST_MARKER_PATHS`); the random value is not. The probe tries each path directly and through `/proc/1/root`, `/host`, `/rootfs`, and `../`. The analyzer marks PROVEN only if the exact random value appears in the build log; otherwise BLOCKED. Marker files are deleted after the build, pass or fail. The build image's own `/etc/passwd`, `/etc/shadow`, and `/proc/1/root` are not checked, because they belong to the image, not the host.
 - **Why:** Smithery-class path leak across the build context boundary.
 - **Remediation:** Per-build mount jail with only the project context mounted.
 
@@ -91,9 +91,9 @@ The runner captures the combined stdout/stderr of `docker build`. The analyzer s
 - **Why:** Shared caches can leak artifacts or enable cache poisoning across tenants.
 - **Remediation:** Per-tenant cache namespaces / separate volumes.
 
-### BB-NET-INTERNAL (medium, network)
+### BB-NET-INTERNAL (low, network; critical if the Docker API answers)
 
-- **Tests:** Short TCP/HTTP probes to docker bridge, RFC1918 gateways, `host.docker.internal`, `metadata.google.internal`.
+- **Tests:** TCP connects (2s timeout, proxy settings ignored) to the build's default gateway on ports 22, 80, and 2375, plus `172.17.0.1:2375`, `10.0.0.1:80`, `192.168.1.1:80`, and `host.docker.internal:80`. curl exit codes 6, 7, and 28 (DNS failure, refused, timeout) mean not connected. A connect counts only if the address reached is private (RFC1918, loopback, link-local); a name that resolves to a public or special-use address is INFO. If port 2375 connects and `GET /version` returns `ApiVersion`, the finding is raised to critical (unauthenticated Docker API).
 - **Why:** Builds that reach management planes can attack adjacent infrastructure.
 - **Remediation:** Isolated builder network; block docker TCP 2375 and host gateway.
 
@@ -130,8 +130,8 @@ Human report with Targets, Builder, Summary, Findings (severity + proof tag), At
   "tool": "BuildBreaker",
   "version": "0.1.0",
   "verdict": "BUILD SURFACE EXPOSED",
-  "proven": 6,
-  "blocked": 4,
+  "proven": 4,
+  "blocked": 6,
   "findings": [ ... ]
 }
 ```
@@ -153,7 +153,7 @@ One result per finding. `properties.proof` carries PROVEN/BLOCKED. Blocked findi
 
 - Reachability is not the same as successful theft. Operators still need to rotate anything that was actually exposed.
 - Full cross-tenant cache proof needs two tenants on one shared cache backend; the single-build probe only detects pre-existing foreign markers.
-- Classic `docker build` (non-containerd-snapshotter setups) may still share the host mount namespace with build steps; that is exactly what BB-PATH-* is meant to show.
+- BB-PATH-ESCAPE checks BuildBreaker's own host marker files only. A builder that mounts a different host path into builds would need that path added to the probe.
 - Windows builders are out of scope.
 
 ## Testing
@@ -162,7 +162,7 @@ One result per finding. `properties.proof` carries PROVEN/BLOCKED. Blocked findi
 pytest -q
 ```
 
-Unit tests cover catalog completeness, marker parsing (including BuildKit noise), report/SARIF shape, and generate(). Integration evidence lives under `examples/` from `./demo/run-demo.sh` on Kali with Docker 28.5.2.
+20 unit tests cover catalog completeness, marker parsing (including BuildKit noise), report/SARIF shape, generate(), host marker planting and cleanup, the host-marker PROVEN/BLOCKED decision, and BB-NET-INTERNAL severity. Integration evidence lives under `examples/` from `./demo/run-demo.sh` on Kali with Docker 28.5.2.
 
 ## Attack advisory index
 

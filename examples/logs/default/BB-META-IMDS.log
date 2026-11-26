@@ -1,29 +1,29 @@
 #0 building with "default" instance using docker driver
 
 #1 [internal] load build definition from Dockerfile
-#1 transferring dockerfile: 779B 0.1s done
+#1 transferring dockerfile: 779B 0.0s done
 #1 DONE 0.1s
 
 #2 [internal] load metadata for docker.io/library/alpine:3.20
-#2 DONE 0.2s
+#2 DONE 0.1s
 
 #3 [internal] load .dockerignore
 #3 transferring context: 62B 0.0s done
-#3 DONE 0.0s
+#3 DONE 0.1s
 
 #4 [1/3] FROM docker.io/library/alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 #4 CACHED
 
 #5 [2/3] RUN apk add --no-cache curl >/dev/null 2>&1 || true
-#5 DONE 5.5s
+#5 DONE 6.0s
 
 #6 [3/3] RUN set -eu;   code=$(curl -sS -o /tmp/imds.txt -w "%{http_code}" -m 3     -H "Metadata-Flavor: Google"     http://169.254.169.254/ 2>/dev/null || echo 000);   if [ "$code" != "000" ] && [ "$code" != "000000" ]; then     head -c 80 /tmp/imds.txt >/tmp/imds.head 2>/dev/null || true;     echo "BB_FINDING:BB-META-IMDS:REACHABLE:http_code=$code";   else     echo "BB_FINDING:BB-META-IMDS:BLOCKED:link-local-unreachable";   fi
-#6 4.297 BB_FINDING:BB-META-IMDS:BLOCKED:link-local-unreachable
-#6 DONE 4.4s
+#6 4.676 BB_FINDING:BB-META-IMDS:BLOCKED:link-local-unreachable
+#6 DONE 4.8s
 
 #7 exporting to image
 #7 exporting layers
-#7 exporting layers 0.7s done
-#7 writing image sha256:7f9b88078c93b16e6ae6184dffcd2403f4216bd9c017b774dfec2740bea555f2 0.0s done
+#7 exporting layers 0.8s done
+#7 writing image sha256:5368e9af64d6e932fdc5239e90c5ce4602af9df69805da8cf454a8c9a6a51137 done
 #7 naming to docker.io/library/buildbreaker-probe:bb-meta-imds 0.0s done
-#7 DONE 0.8s
+#7 DONE 0.9s
